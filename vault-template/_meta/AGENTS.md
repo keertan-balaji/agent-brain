@@ -23,8 +23,34 @@ Before reading anything, search. Before reading everything, read targeted.
 - Read at most 3–5 notes per recall round. If you need more, narrow the query.
 - When summarizing for yourself or another agent, emit ≤500 tokens with note titles cited — never dump raw bodies.
 
+## Project bootstrap is mandatory
+
+**When you start work on a new project, your first vault action is to create `projects/<project-name>/`.** This is non-negotiable. A project is anything that spans more than a single one-shot exchange: a new repo, a research question, an audit, a migration.
+
+The bootstrap creates:
+
+- `projects/<name>/index.md` — a frontmatter-validated project index. The template is picked by task type.
+- `projects/<name>/tasks/` — always.
+- `projects/<name>/modules/` — only for `task_type: development`.
+
+The index `frontmatter` must include `type: project`, `project: <name>`, `task_type: <one-of>`, `status`, `created`, `updated`.
+
+Pick `task_type` from exactly these four values:
+
+| Work looks like | task_type |
+|---|---|
+| Building/shipping code in a repo | `development` |
+| Investigating a question, gathering sources, no code output | `research` |
+| Reading an existing repo to map/audit/onboard | `repo-analysis` |
+| None of the above | `generic` |
+
+If you don't know how to bootstrap from your environment, the conventions are documented in `templates/project-*.md` — copy the matching template, fill its `{{date}}`, `{{title}}`, `{{project}}` placeholders, and write it as `projects/<name>/index.md`. Refuse to overwrite an existing project — extend the existing index instead.
+
+Claude Code agents: invoke `obsidian-project-bootstrap` skill. Other agents: follow the rule above directly.
+
 ## Write rules
 
+- **Always bootstrap a project before capturing notes that belong to it** (see above). `agent-memory/` captures during project work should carry `project: <name>` in their frontmatter to attach back to the project.
 - Write freely to `agent-memory/`, `projects/`, and `daily/`.
 - **Do not** write to `knowledge/` directly. That section is human-curated. Notes graduate there via the `obsidian-curate` workflow.
 - Every new note **must** start with the YAML frontmatter described in [[frontmatter-schema]].
@@ -51,9 +77,10 @@ The user's Obsidian app may have the same file open. Mitigation:
 
 ## Skills (Claude Code)
 
-If you are Claude Code, three skills wrap these conventions:
+If you are Claude Code, four skills wrap these conventions:
 
 - `obsidian-setup` — first-run vault scaffolding and config.
+- `obsidian-project-bootstrap` — **mandatory** at the start of every new project.
 - `obsidian-recall` — search → rank → synthesize.
 - `obsidian-capture` — pick template → fill frontmatter → write.
 

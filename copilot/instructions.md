@@ -2,6 +2,12 @@
 
 This repository participates in a shared second-brain system at `~/Documents/ObsidianVault/`.
 
+## At the start of every new project (mandatory)
+
+Before any other vault writes, create `~/Documents/ObsidianVault/projects/<project-name>/` with a populated `index.md`. Pick `<project-name>` from the repo basename (`basename "$(pwd)"`) unless told otherwise. Pick a `task_type`: `research`, `development`, `repo-analysis`, or `generic`. Copy the matching template from `~/Documents/ObsidianVault/templates/project-<task_type>.md`, fill `{{date}}`, `{{title}}`, `{{project}}` placeholders, write to `projects/<name>/index.md`. Create `tasks/` (always) and `modules/` (development only). Never overwrite an existing project — extend the index.
+
+This step is non-negotiable. Every capture during this project carries `project: <project-name>` in its frontmatter.
+
 ## Before non-trivial work
 
 Read `~/Documents/ObsidianVault/_meta/AGENTS.md` for vault conventions. Search the vault for relevant context with ripgrep before reading code:

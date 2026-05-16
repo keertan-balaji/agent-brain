@@ -1,0 +1,6 @@
+{
+  "name": "obsidian-second-brain",
+  "description": "Turns an Obsidian vault into a persistent second brain for Gemini CLI. Structured recall and capture across sessions.",
+  "version": "0.2.0",
+  "contextFileName": "GEMINI.md"
+}

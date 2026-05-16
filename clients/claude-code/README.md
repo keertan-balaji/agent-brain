@@ -1,47 +1,60 @@
 # Claude Code
 
-Claude Code is the only platform with a real skill runtime. The five skills (`obsidian-setup`, `obsidian-project-bootstrap`, `obsidian-map-repo`, `obsidian-recall`, `obsidian-capture`) load as proper Claude Code skills with their own `/`-commands.
+The repo ships a Claude Code plugin manifest at `.claude-plugin/plugin.json` and a single-plugin marketplace at `.claude-plugin/marketplace.json`. Skills under `skills/` are auto-discovered. Three install paths, in order of preference.
 
-## Option A — one-shot installer (recommended)
+## Option A — marketplace (recommended)
 
-From the repo root:
+Register this repo as a marketplace, then install the plugin. From inside Claude Code:
+
+```text
+/plugin marketplace add keertan/obsidian-second-brain
+/plugin install obsidian-second-brain@obsidian-second-brain
+```
+
+If you've cloned the repo locally and don't want to round-trip through GitHub:
+
+```text
+/plugin marketplace add /home/keertan/codes/brain
+/plugin install obsidian-second-brain@obsidian-second-brain
+```
+
+The local-directory form reads `.claude-plugin/marketplace.json` directly. Updates propagate as you pull the repo.
+
+## Option B — manual marketplace registration via settings.json
+
+Add an entry to `~/.claude/settings.json`:
+
+```json
+"extraKnownMarketplaces": {
+  "obsidian-second-brain": {
+    "source": { "source": "directory", "path": "/home/keertan/codes/brain" }
+  }
+}
+```
+
+Then in Claude Code: `/plugin install obsidian-second-brain@obsidian-second-brain`.
+
+## Option C — symlink installer (no plugin runtime)
+
+If you want skills loaded but don't want them managed as a plugin:
 
 ```bash
 bash clients/install-claude-code.sh
 ```
 
 What it does:
-- Symlinks every `skills/<name>/` directory into `~/.claude/skills/<name>`.
-- Skips entries that are already correctly linked.
+- Symlinks every `skills/<name>/` into `~/.claude/skills/<name>`.
+- Skips entries already correctly linked.
 - Replaces stale symlinks (warns first).
-- Refuses to touch non-symlink files at the target paths.
+- Refuses to touch non-symlink files at target paths.
 
-Idempotent. Re-run any time after you pull updates to the repo.
-
-Override the target with `CLAUDE_SKILLS_DIR=/some/other/path bash clients/install-claude-code.sh`.
-
-## Option B — marketplace plugin
-
-If you'd rather manage the pack like other plugins:
-
-1. Either clone the repo somewhere stable (`~/projects/brain`, `/opt/brain`, etc.) or treat your existing `$(pwd)` as the install location.
-2. Add this repo to your Claude Code marketplace. In `~/.claude/settings.json` under `extraKnownMarketplaces`, add a `directory` source:
-   ```json
-   "extraKnownMarketplaces": {
-     "obsidian-second-brain": {
-       "source": { "source": "directory", "path": "/home/keertan/codes/brain" }
-     }
-   }
-   ```
-3. Then `/plugin install obsidian-second-brain@obsidian-second-brain`.
-
-(`plugin.json` at the repo root declares the five skills.)
+Idempotent. Override target with `CLAUDE_SKILLS_DIR=/path bash clients/install-claude-code.sh`.
 
 ## After install
 
 1. Open Claude Code in any project.
-2. Run `/obsidian-setup`. It asks where your Obsidian vault is and persists the choice.
-3. Add the vault path to `~/.claude/settings.json` so native file tools (Read/Edit/Write/Grep) can reach it:
+2. Run `/obsidian-setup`. It asks where your vault is (Obsidian Sync path, custom location, or default `~/Documents/ObsidianVault`) and persists the choice.
+3. Add the vault path to `~/.claude/settings.json` so native file tools reach it:
    ```json
    "permissions": {
      "additionalDirectories": ["/home/keertan/Documents/ObsidianVault"]
@@ -49,9 +62,13 @@ If you'd rather manage the pack like other plugins:
    ```
    (Auto-mode correctly blocks the agent from doing this for you — apply it manually.)
 4. Run `/obsidian-map-repo` to onboard the current repo as a project.
-5. From here on, use `/obsidian-recall <topic>` before non-trivial work and `/obsidian-capture <type>` after decisions/gotchas.
+5. Use `/obsidian-recall <topic>` before non-trivial work and `/obsidian-capture <type>` after decisions/gotchas.
 
 ## Uninstall
+
+Marketplace install: `/plugin uninstall obsidian-second-brain@obsidian-second-brain`.
+
+Symlink install:
 
 ```bash
 for name in obsidian-setup obsidian-project-bootstrap obsidian-map-repo \
@@ -60,4 +77,4 @@ for name in obsidian-setup obsidian-project-bootstrap obsidian-map-repo \
 done
 ```
 
-The vault itself is untouched. To remove the vault, delete `~/Documents/ObsidianVault/` manually.
+The vault itself is untouched.

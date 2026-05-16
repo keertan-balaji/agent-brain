@@ -1,0 +1,22 @@
+{
+  "name": "obsidian-second-brain",
+  "description": "Turns an Obsidian vault into a persistent, organized second brain for coding agents. Filesystem-direct, no MCP. Five skills: setup, project-bootstrap (mandatory), map-repo, recall, capture.",
+  "version": "0.2.0",
+  "author": {
+    "name": "keertan",
+    "email": "keertan@syntheticsciences.ai"
+  },
+  "homepage": "https://github.com/keertan/obsidian-second-brain",
+  "repository": "https://github.com/keertan/obsidian-second-brain",
+  "license": "MIT",
+  "keywords": [
+    "obsidian",
+    "second-brain",
+    "knowledge-management",
+    "memory",
+    "skills",
+    "vault",
+    "recall",
+    "capture"
+  ]
+}

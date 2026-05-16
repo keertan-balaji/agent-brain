@@ -1,0 +1,42 @@
+{
+  "name": "obsidian-second-brain",
+  "version": "0.2.0",
+  "description": "Turns an Obsidian vault into a persistent second brain for coding agents. Five skills enforce a project-bootstrap-first workflow, structured recall before non-trivial work, and structured capture of decisions/gotchas.",
+  "author": {
+    "name": "keertan",
+    "email": "keertan@syntheticsciences.ai",
+    "url": "https://github.com/keertan"
+  },
+  "homepage": "https://github.com/keertan/obsidian-second-brain",
+  "repository": "https://github.com/keertan/obsidian-second-brain",
+  "license": "MIT",
+  "keywords": [
+    "obsidian",
+    "second-brain",
+    "memory",
+    "skills",
+    "knowledge-management",
+    "recall",
+    "capture",
+    "workflow"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Obsidian Second Brain",
+    "shortDescription": "Persistent, organized memory in your Obsidian vault for any coding agent.",
+    "longDescription": "Coding agents waste time and context every session rediscovering enterprise knowledge — architecture, APIs, process docs, prior decisions, recurring gotchas. This pack gives agents a structured vault, mandatory project bootstrap on entry, recall-before-coding, and structured capture of learnings. Filesystem-direct: no MCP, no server. Works across Claude Code, Codex, Cursor, Copilot, Gemini, and anything that reads markdown.",
+    "developerName": "keertan",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Set up the Obsidian brain.",
+      "Map this repo into Obsidian.",
+      "What does the vault know about <topic>?"
+    ],
+    "websiteURL": "https://github.com/keertan/obsidian-second-brain"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "obsidian-second-brain",
+  "owner": {
+    "name": "keertan",
+    "email": "keertan@syntheticsciences.ai"
+  },
+  "metadata": {
+    "description": "Obsidian-as-second-brain skill pack for coding agents",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "obsidian-second-brain",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/keertan/obsidian-second-brain.git"
+      },
+      "description": "Persistent, organized memory for coding agents. Filesystem-direct, agent-agnostic, mandatory project-bootstrap rule.",
+      "version": "0.2.0",
+      "strict": true
+    }
+  ]
+}

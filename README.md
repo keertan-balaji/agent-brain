@@ -1,28 +1,51 @@
 # Obsidian Second Brain
 
-A Claude Code skill pack that turns an Obsidian vault into a persistent, organized second brain for coding agents. Filesystem-direct (no MCP server), agent-agnostic (Claude Code, GitHub Copilot, Cursor, etc.).
+A Claude Code skill pack that turns an Obsidian vault into a persistent, organized second brain for coding agents. Filesystem-direct (no MCP server), agent-agnostic (Claude Code, GitHub Copilot, Cursor, Aider, Codex, and anything else that reads markdown).
 
 ## What it does
 
 Coding agents waste time and context every session rediscovering enterprise knowledge — architecture, APIs, process docs, prior decisions, recurring gotchas. This pack gives agents:
 
-- A **structured vault** scaffolded at `~/Documents/ObsidianVault/` with sections for durable knowledge, agent working memory, per-project notes, and daily logs.
+- A **structured vault** at `~/Documents/ObsidianVault/` with sections for durable knowledge, agent working memory, per-project notes, and daily logs.
 - **Skills** that tell agents *when* to recall context (before non-trivial work) and *how* to capture learnings (decisions, gotchas, patterns).
-- **Cross-agent interop** via `_meta/AGENTS.md` — any agent with filesystem access can use the same vault.
+- **A mandatory project-bootstrap rule** — every new project starts with `projects/<name>/` and a task-typed index. Non-negotiable. Cross-agent.
+- **Cross-agent interop** via `_meta/AGENTS.md` — any agent with filesystem access uses the same vault.
 - **Cross-device sync** by riding Obsidian Sync (you bring your own).
 
 ## Install
 
-1. Clone this repo (any path is fine).
-2. Symlink skills into Claude Code:
-   ```bash
-   ln -s "$(pwd)/skills/obsidian-setup" ~/.claude/skills/obsidian-setup
-   ln -s "$(pwd)/skills/obsidian-recall" ~/.claude/skills/obsidian-recall
-   ln -s "$(pwd)/skills/obsidian-capture" ~/.claude/skills/obsidian-capture
-   ```
-   Or add this repo to your Claude Code marketplace.
-3. In Claude Code, run: `/obsidian-setup`
-4. Done. Try `/obsidian-recall <topic>` and `/obsidian-capture <decision|gotcha|pattern>`.
+The skill runtime is Claude Code. Every other agent gets the same behavior via a one-file instructions drop. See `clients/README.md` for the full matrix; quick paths below.
+
+### Claude Code (skills run natively)
+
+```bash
+git clone <this-repo> ~/codes/brain   # or anywhere stable
+cd ~/codes/brain
+bash clients/install-claude-code.sh   # symlinks all 5 skills into ~/.claude/skills/
+```
+
+Then in Claude Code: `/obsidian-setup` (asks for vault path), then `/obsidian-map-repo` to onboard the current repo.
+
+Also add the vault path to `~/.claude/settings.json` so native file tools reach it:
+
+```json
+"permissions": { "additionalDirectories": ["/home/keertan/Documents/ObsidianVault"] }
+```
+
+(Auto-mode correctly blocks the agent from doing this for you — apply it manually.)
+
+### Other agents (one file, different paths)
+
+| Agent | Drop this file at | One-liner |
+|---|---|---|
+| GitHub Copilot | `.github/copilot-instructions.md` | `cp ~/codes/brain/clients/agent-instructions.md .github/copilot-instructions.md` |
+| Cursor (modern) | `.cursor/rules/obsidian-brain.mdc` | `cp ~/codes/brain/clients/agent-instructions.md .cursor/rules/obsidian-brain.mdc` |
+| Cursor (legacy) | `.cursorrules` | `cp ~/codes/brain/clients/agent-instructions.md .cursorrules` |
+| Aider | `CONVENTIONS.md` + `--read` | `cp ~/codes/brain/clients/agent-instructions.md CONVENTIONS.md` |
+| Codex / AGENTS.md spec | `AGENTS.md` | `cp ~/codes/brain/clients/agent-instructions.md AGENTS.md` |
+| Cline / Continue / Zed / Windsurf | varies | see `clients/generic/README.md` |
+
+Per-platform install notes and verification steps live in `clients/<platform>/README.md`. Symlink instead of copy if you want one source of truth across many repos.
 
 ## Skills
 
@@ -34,9 +57,12 @@ Coding agents waste time and context every session rediscovering enterprise know
 | `obsidian-recall` | Before non-trivial work; when topic mentioned; before brainstorming |
 | `obsidian-capture` | After non-trivial decision; gotcha hit; pattern emerged |
 
-## For other agents
+## Why this design
 
-Point GitHub Copilot, Cursor, Aider, etc. at `~/Documents/ObsidianVault/_meta/AGENTS.md`. That file is the cross-agent contract describing vault conventions. A copy of `copilot/instructions.md` can be dropped into any repo as `.github/copilot-instructions.md`.
+- **No MCP server.** The vault is plain markdown; agents use their native file tools. One fewer moving part, fewer failure modes, and the same vault works for every agent on day one.
+- **Vault conventions are runtime-loaded.** Agents read `<vault>/_meta/AGENTS.md` at session start. Update conventions there once and every agent picks them up — no re-install across N repos.
+- **Bootstrap is mandatory.** Every new project gets a folder + task-typed index before any other vault writes. Encoded in both the Claude Code skill and the cross-agent contract.
+- **Write isolation.** Agents write freely to `agent-memory/` and `projects/`. `knowledge/` is human-curated, never agent-clobbered.
 
 ## Design docs
 
@@ -48,3 +74,5 @@ Point GitHub Copilot, Cursor, Aider, etc. at `~/Documents/ObsidianVault/_meta/AG
 ```bash
 bash tests/run-all.sh
 ```
+
+9 test files covering scaffold, frontmatter validation, recall priority ranking, capture, project bootstrap, repo mapping, vault connect/resolve, end-to-end loop, and the Claude Code installer.

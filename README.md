@@ -30,6 +30,7 @@ Coding agents waste time and context every session rediscovering enterprise know
 |---|---|
 | `obsidian-setup` | First run; asks where your vault is (Obsidian Sync path or default), scaffolds gaps, persists choice |
 | `obsidian-project-bootstrap` | **Mandatory** — first action on any new project |
+| `obsidian-map-repo` | Onboard a coding repo: scan stack/tree/README/git into `projects/<repo>/repo-map.md` |
 | `obsidian-recall` | Before non-trivial work; when topic mentioned; before brainstorming |
 | `obsidian-capture` | After non-trivial decision; gotcha hit; pattern emerged |
 

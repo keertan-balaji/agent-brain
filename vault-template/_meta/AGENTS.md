@@ -77,10 +77,11 @@ The user's Obsidian app may have the same file open. Mitigation:
 
 ## Skills (Claude Code)
 
-If you are Claude Code, four skills wrap these conventions:
+If you are Claude Code, five skills wrap these conventions:
 
 - `obsidian-setup` — first-run; ask the user where the vault is, scaffold gaps, persist the choice.
 - `obsidian-project-bootstrap` — **mandatory** at the start of every new project.
+- `obsidian-map-repo` — onboard a coding repo: bootstrap project + scan stack/tree/README/git into `repo-map.md`.
 - `obsidian-recall` — search → rank → synthesize.
 - `obsidian-capture` — pick template → fill frontmatter → write.
 

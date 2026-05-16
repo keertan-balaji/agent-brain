@@ -13,7 +13,8 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 vault="$tmp/vault"
-bash skills/obsidian-setup/scripts/scaffold-vault.sh "$vault" >/dev/null
+brain="$vault/Agent-Brain"
+bash skills/obsidian-setup/scripts/scaffold-brain.sh "$vault" >/dev/null
 
 # Build a synthetic repo: Python project, with README and git history.
 repo="$tmp/myrepo"
@@ -53,18 +54,18 @@ if bash "$SCRIPT" "$vault" >/dev/null 2>&1; then
 fi
 
 # Case 2: nonexistent repo.
-if bash "$SCRIPT" "$vault" "$tmp/nope" >/dev/null 2>&1; then
+if bash "$SCRIPT" "$brain" "$tmp/nope" >/dev/null 2>&1; then
   printf "nonexistent repo accepted\n" >&2; exit 1
 fi
 
 # Case 3: file-not-dir rejected.
 touch "$tmp/afile"
-if bash "$SCRIPT" "$vault" "$tmp/afile" >/dev/null 2>&1; then
+if bash "$SCRIPT" "$brain" "$tmp/afile" >/dev/null 2>&1; then
   printf "file-not-dir accepted\n" >&2; exit 1
 fi
 
 # Case 4: fresh repo with no existing project — bootstraps then maps.
-out=$(bash "$SCRIPT" "$vault" "$repo")
+out=$(bash "$SCRIPT" "$brain" "$repo")
 if [ -z "$out" ] || [ ! -f "$out" ]; then
   printf "map file not created\n" >&2; exit 1
 fi
@@ -72,7 +73,7 @@ case "$out" in
   */projects/myrepo/repo-map.md) ;;
   *) printf "unexpected map path: %s\n" "$out" >&2; exit 1 ;;
 esac
-[ -f "$vault/projects/myrepo/index.md" ] || { printf "project index missing\n" >&2; exit 1; }
+[ -f "$brain/projects/myrepo/index.md" ] || { printf "project index missing\n" >&2; exit 1; }
 
 # Frontmatter valid.
 if ! bash "$VALIDATOR" "$out" >/dev/null 2>&1; then
@@ -102,7 +103,7 @@ for needle in \
 done
 
 # Case 5: re-running without --force fails.
-if bash "$SCRIPT" "$vault" "$repo" >/dev/null 2>&1; then
+if bash "$SCRIPT" "$brain" "$repo" >/dev/null 2>&1; then
   printf "re-map without --force accepted\n" >&2; exit 1
 fi
 
@@ -110,7 +111,7 @@ fi
 sleep 1
 echo "modified content" >> "$repo/README.md"
 ( cd "$repo" && git -c user.email=t@t -c user.name=t commit -aq -m "docs: another line" )
-out2=$(bash "$SCRIPT" "$vault" "$repo" --force)
+out2=$(bash "$SCRIPT" "$brain" "$repo" --force)
 [ -f "$out2" ] || { printf "force map not created\n" >&2; exit 1; }
 grep -q "docs: another line" "$out2" || { printf "force re-map didn't refresh git activity\n" >&2; exit 1; }
 
@@ -120,7 +121,7 @@ mkdir -p "$plain"
 cat > "$plain/package.json" <<'EOF'
 { "name": "plain", "version": "0.0.0" }
 EOF
-out3=$(bash "$SCRIPT" "$vault" "$plain")
+out3=$(bash "$SCRIPT" "$brain" "$plain")
 grep -q "Node" "$out3" || { printf "Node stack not detected\n" >&2; exit 1; }
 grep -q "not a git repository" "$out3" || { printf "non-git not flagged\n" >&2; exit 1; }
 
@@ -128,7 +129,7 @@ grep -q "not a git repository" "$out3" || { printf "non-git not flagged\n" >&2; 
 bare="$tmp/barerepo"
 mkdir -p "$bare/random"
 touch "$bare/random/x.txt"
-out4=$(bash "$SCRIPT" "$vault" "$bare")
+out4=$(bash "$SCRIPT" "$brain" "$bare")
 grep -q "no README detected" "$out4" || { printf "missing README not flagged\n" >&2; exit 1; }
 grep -q "no recognized manifests detected" "$out4" || { printf "missing manifests not flagged\n" >&2; exit 1; }
 

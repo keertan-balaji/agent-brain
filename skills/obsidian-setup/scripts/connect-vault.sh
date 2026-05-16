@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # connect-vault.sh <vault-path>
-# Validates the supplied path, fills in any missing structural pieces using
-# scaffold-vault.sh (existing user files are never touched), persists the
-# absolute path to $BRAIN_VAULT_CONFIG (default: <brain-repo>/.vault-path)
-# so other skills resolve to the same vault.
+# Validates the supplied path and scaffolds the agent's namespace inside it
+# at <vault>/Agent-Brain/ (override via $BRAIN_SUBDIR). The user's own vault
+# content — anything outside Agent-Brain/ — is never touched. Persists the
+# vault path to $BRAIN_VAULT_CONFIG (default: <brain-repo>/.vault-path).
 #
 # Behavior:
 #   - empty / missing / file path  → reject
-#   - empty dir                    → accept, full scaffold
-#   - dir containing .obsidian/    → accept (confirmed Obsidian vault), fill gaps only
-#   - dir with content but no .obsidian/ → accept with stderr warning, fill gaps only
+#   - empty dir                    → accept, scaffold Agent-Brain/
+#   - dir containing .obsidian/    → accept (confirmed Obsidian vault), scaffold Agent-Brain/
+#   - dir with content but no .obsidian/ → accept with stderr warning, scaffold Agent-Brain/
 #
-# Output: absolute resolved path on stdout.
+# Output: absolute vault path on stdout.
 
 set -euo pipefail
 
@@ -48,9 +48,9 @@ else
   printf "warning: %s has content but no .obsidian/ — treating as plain notes dir\n" "$abs" >&2
 fi
 
-# Fill structural gaps via scaffold-vault.sh (idempotent: skips existing files).
+# Scaffold the agent namespace via scaffold-brain.sh (idempotent: skips existing files).
 script_dir=$(cd "$(dirname "$0")" && pwd)
-scaffold="$script_dir/scaffold-vault.sh"
+scaffold="$script_dir/scaffold-brain.sh"
 if [ ! -x "$scaffold" ]; then
   printf "scaffold helper not found: %s\n" "$scaffold" >&2
   exit 1

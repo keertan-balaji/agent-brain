@@ -38,10 +38,10 @@ Onboard a coding repo into the vault: bootstrap the project folder, then generat
 ### Step 1 — resolve vault and repo
 
 ```bash
-BRAIN=/home/keertan/codes/brain
-VAULT=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
-# Default repo = current working directory's git root, else cwd.
-REPO=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+REPO=/home/keertan/codes/brain
+BRAIN=$(bash "$REPO/skills/obsidian-setup/scripts/resolve-brain.sh")
+# Default target = current working directory's git root, else cwd.
+TARGET=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 ```
 
 If the user supplied a different path, use that. Otherwise the git root of the cwd.
@@ -49,7 +49,7 @@ If the user supplied a different path, use that. Otherwise the git root of the c
 ### Step 2 — run the map
 
 ```bash
-path=$(bash "$BRAIN/skills/obsidian-map-repo/scripts/map-repo.sh" "$VAULT" "$REPO")
+path=$(bash "$REPO/skills/obsidian-map-repo/scripts/map-repo.sh" "$BRAIN" "$TARGET")
 ```
 
 If the script fails with "already exists", decide:
@@ -59,7 +59,7 @@ If the script fails with "already exists", decide:
 ### Step 3 — validate
 
 ```bash
-bash "$BRAIN/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$path"
+bash "$REPO/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$path"
 ```
 
 Must exit 0.

@@ -6,10 +6,10 @@ A skill pack that turns an Obsidian vault into a persistent, organized second br
 
 Coding agents waste time and context every session rediscovering enterprise knowledge — architecture, APIs, process docs, prior decisions, recurring gotchas. This pack gives agents:
 
-- A **structured vault** at `~/Documents/ObsidianVault/` with sections for durable knowledge, agent working memory, per-project notes, and daily logs.
+- A **namespaced workspace** at `~/Documents/ObsidianVault/Agent-Brain/` with sections for durable knowledge, agent working memory, per-project notes, and daily logs. The rest of your vault — your own notes, journals, references — is off-limits to every skill.
 - **Skills** that tell agents *when* to recall context (before non-trivial work) and *how* to capture learnings (decisions, gotchas, patterns).
 - **A mandatory project-bootstrap rule** — every new project starts with `projects/<name>/` and a task-typed index. Non-negotiable. Cross-agent.
-- **Cross-agent interop** via `<vault>/_meta/AGENTS.md` — any agent with filesystem access uses the same vault.
+- **Cross-agent interop** via `<vault>/Agent-Brain/_meta/AGENTS.md` — any agent with filesystem access uses the same brain.
 - **Cross-device sync** by riding Obsidian Sync (you bring your own).
 
 ## Install
@@ -121,7 +121,8 @@ Drop `clients/agent-instructions.md` at the path your agent reads. See `clients/
 ## Why this design
 
 - **No MCP server.** The vault is plain markdown; agents use their native file tools. One fewer moving part, fewer failure modes, and the same vault works for every agent on day one.
-- **Vault conventions are runtime-loaded.** Agents read `<vault>/_meta/AGENTS.md` at session start. Update conventions there once and every agent picks them up — no re-install across N repos.
+- **Conventions are runtime-loaded.** Agents read `<vault>/Agent-Brain/_meta/AGENTS.md` at session start. Update conventions there once and every agent picks them up — no re-install across N repos.
+- **Single namespace, no vault pollution.** Everything the agent creates lives under `<vault>/Agent-Brain/`. Your existing notes, daily journal, and references stay untouched. Override the subdir name with `BRAIN_SUBDIR=Some-Name` if `Agent-Brain` clashes.
 - **Bootstrap is mandatory.** Every new project gets a folder + task-typed index before any other vault writes. Encoded in both the platform skills and the cross-agent contract.
 - **Write isolation.** Agents write freely to `agent-memory/` and `projects/`. `knowledge/` is human-curated, never agent-clobbered.
 

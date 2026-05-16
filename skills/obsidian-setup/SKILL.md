@@ -22,7 +22,7 @@ Connect this skill pack to a vault and remember which one.
 3. **Validate** the chosen path: exists, is a directory, readable+writable.
 4. **Classify**: existing Obsidian vault (has `.obsidian/`), empty directory (will be scaffolded), or non-empty plain directory (warn but proceed).
 5. **Fill structural gaps** via `scaffold-vault.sh`. Only adds missing `_meta/`, `templates/`, section dirs — never overwrites user content.
-6. **Persist** the absolute path to `<brain-repo>/.vault-path` (or `$BRAIN_VAULT_CONFIG` if set). All other skills read this via `resolve-vault.sh`.
+6. **Persist** the absolute path to `<brain-repo>/.vault-path` (or `$BRAIN_VAULT_CONFIG` if set). All other skills read this via `resolve-brain.sh`.
 7. **Surface permissions reminder.** If the path isn't already in Claude Code's `additionalDirectories`, tell the user; don't edit `~/.claude/settings.json` autonomously.
 
 ## How
@@ -30,8 +30,8 @@ Connect this skill pack to a vault and remember which one.
 ### Step 1 — show the current state
 
 ```bash
-BRAIN=/home/keertan/codes/brain
-current=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
+REPO=/home/keertan/codes/brain
+current=$(bash "$REPO/skills/obsidian-setup/scripts/resolve-brain.sh")
 ```
 
 This prints whichever path would be used right now: `$OBSIDIAN_VAULT` env > persisted `.vault-path` > default `$HOME/Documents/ObsidianVault`.
@@ -51,7 +51,7 @@ If the user picks "Other", they type the path. Treat `~` and shell variables lit
 ### Step 3 — connect
 
 ```bash
-chosen=$(bash "$BRAIN/skills/obsidian-setup/scripts/connect-vault.sh" "<path>")
+chosen=$(bash "$REPO/skills/obsidian-setup/scripts/connect-vault.sh" "<path>")
 ```
 
 The script:
@@ -65,7 +65,7 @@ If it errors, surface the message and re-ask.
 ### Step 4 — verify
 
 ```bash
-bash "$BRAIN/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$chosen/_meta/AGENTS.md"
+bash "$REPO/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$chosen/Agent-Brain/_meta/AGENTS.md"
 ```
 
 Exit 0 = the vault is wired up.
@@ -93,7 +93,7 @@ Report: `Vault connected: <path>` plus the next-step suggestion (`/obsidian-proj
 Every other `obsidian-*` skill (and their helper scripts) resolves the vault by calling:
 
 ```bash
-VAULT=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
+BRAIN=$(bash <brain-repo>/skills/obsidian-setup/scripts/resolve-brain.sh)
 ```
 
 Order: `$OBSIDIAN_VAULT` env → `.vault-path` file → `$HOME/Documents/ObsidianVault` fallback. Once `obsidian-setup` runs, every subsequent skill follows.

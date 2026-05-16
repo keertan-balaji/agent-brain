@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# resolve-vault.sh
+# resolve-brain.sh
 # Prints the resolved Obsidian vault path on stdout.
 # Resolution order (first hit wins):
 #   1. $OBSIDIAN_VAULT environment variable

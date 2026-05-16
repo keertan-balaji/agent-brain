@@ -41,7 +41,7 @@ Pull just-enough context from the vault before working.
 ### Step 1 — resolve vault
 
 ```bash
-VAULT=$(bash skills/obsidian-setup/scripts/resolve-vault.sh)
+BRAIN=$(bash skills/obsidian-setup/scripts/resolve-brain.sh)
 ```
 
 Honors env > persisted `.vault-path` > default. Set once via `obsidian-setup`.
@@ -51,7 +51,7 @@ Honors env > persisted `.vault-path` > default. Set once via `obsidian-setup`.
 From the brain repo root:
 
 ```bash
-bash skills/obsidian-recall/scripts/recall-search.sh "$VAULT" "<query>"
+bash skills/obsidian-recall/scripts/recall-search.sh "$BRAIN" "<query>"
 ```
 
 Use `<query>` as a fixed string. For multi-word queries, quote them. If you need broader matching, run multiple queries with the key terms separately and merge.

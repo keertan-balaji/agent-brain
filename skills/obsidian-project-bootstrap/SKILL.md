@@ -53,10 +53,10 @@ Pick exactly one. If genuinely unclear, use `generic` and refine later by editin
 ### Step 3 — bootstrap
 
 ```bash
-BRAIN=/home/keertan/codes/brain
-VAULT=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
-path=$(bash "$BRAIN/skills/obsidian-project-bootstrap/scripts/bootstrap-project.sh" \
-  "$VAULT" "<project-name>" "<task_type>" "<human-readable-title>")
+REPO=/home/keertan/codes/brain
+BRAIN=$(bash "$REPO/skills/obsidian-setup/scripts/resolve-brain.sh")
+path=$(bash "$REPO/skills/obsidian-project-bootstrap/scripts/bootstrap-project.sh" \
+  "$BRAIN" "<project-name>" "<task_type>" "<human-readable-title>")
 ```
 
 `path` is the absolute path of `projects/<name>/index.md`. Keep it.
@@ -70,7 +70,7 @@ Use the Edit tool on `path`. The template ships with section headers tailored to
 Run `recall-search.sh` for key concepts in the new project to find existing `knowledge/` notes worth linking from the index:
 
 ```bash
-bash "$BRAIN/skills/obsidian-recall/scripts/recall-search.sh" "$VAULT" "<concept>"
+bash "$REPO/skills/obsidian-recall/scripts/recall-search.sh" "$BRAIN" "<concept>"
 ```
 
 Add the hits as `[[wikilinks]]` in the index "Architecture pointers" / "Related" sections.
@@ -78,7 +78,7 @@ Add the hits as `[[wikilinks]]` in the index "Architecture pointers" / "Related"
 ### Step 6 — validate
 
 ```bash
-bash "$BRAIN/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$path"
+bash "$REPO/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$path"
 ```
 
 Must exit 0.

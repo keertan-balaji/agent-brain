@@ -49,9 +49,9 @@ Persist a finding to the vault so it shows up next time someone asks.
 ### Step 2 — generate the note shell
 
 ```bash
-VAULT=$(bash skills/obsidian-setup/scripts/resolve-vault.sh)
+BRAIN=$(bash skills/obsidian-setup/scripts/resolve-brain.sh)
 path=$(bash skills/obsidian-capture/scripts/make-note.sh \
-  "$VAULT" "<type>" "<title>" "<tag,tag>" "<project-or-empty>")
+  "$BRAIN" "<type>" "<title>" "<tag,tag>" "<project-or-empty>")
 ```
 
 `path` is the absolute path of the created file. Keep it.
@@ -65,7 +65,7 @@ Use the Edit tool on `path`. Replace the template placeholder sections (Context,
 Find related notes:
 
 ```bash
-bash skills/obsidian-recall/scripts/recall-search.sh "$VAULT" "<key-concept>"
+bash skills/obsidian-recall/scripts/recall-search.sh "$BRAIN" "<key-concept>"
 ```
 
 Pick the most relevant hits. Add their slugs (filename without `.md`) as `[[slug]]` inside the body's "Related" section and also in the frontmatter `related:` list.

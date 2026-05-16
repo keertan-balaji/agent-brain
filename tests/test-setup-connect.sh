@@ -4,8 +4,9 @@ cd "$(dirname "$0")/.."
 
 CONNECT=skills/obsidian-setup/scripts/connect-vault.sh
 RESOLVE=skills/obsidian-setup/scripts/resolve-vault.sh
+RESOLVE_BRAIN=skills/obsidian-setup/scripts/resolve-brain.sh
 
-for s in "$CONNECT" "$RESOLVE"; do
+for s in "$CONNECT" "$RESOLVE" "$RESOLVE_BRAIN"; do
   if [ ! -x "$s" ]; then
     printf "script missing or not executable: %s\n" "$s" >&2
     exit 1
@@ -36,14 +37,20 @@ if bash "$CONNECT" "$tmp/afile" >/dev/null 2>&1; then
   printf "file-not-dir accepted\n" >&2; exit 1
 fi
 
-# Case 4: empty dir — accepted, scaffolded, persisted.
+# Case 4: empty dir — accepted, Agent-Brain/ scaffolded inside it, persisted.
 mkdir -p "$tmp/empty-vault"
 if ! bash "$CONNECT" "$tmp/empty-vault" >/dev/null; then
   printf "empty-dir connect failed\n" >&2; exit 1
 fi
-for f in _meta/AGENTS.md templates/decision.md templates/project-development.md; do
+for f in Agent-Brain/_meta/AGENTS.md Agent-Brain/templates/decision.md Agent-Brain/templates/project-development.md; do
   if [ ! -f "$tmp/empty-vault/$f" ]; then
     printf "scaffold gap not filled: %s\n" "$f" >&2; exit 1
+  fi
+done
+# Vault root must not get the scaffold sections.
+for d in knowledge agent-memory projects daily _meta templates; do
+  if [ -d "$tmp/empty-vault/$d" ]; then
+    printf "scaffolded section leaked into vault root: %s\n" "$d" >&2; exit 1
   fi
 done
 got=$(cat "$BRAIN_VAULT_CONFIG")
@@ -51,21 +58,37 @@ if [ "$got" != "$tmp/empty-vault" ]; then
   printf "persisted path mismatch: %s vs %s\n" "$got" "$tmp/empty-vault" >&2; exit 1
 fi
 
-# Case 5: existing vault with .obsidian/ — accepted, gaps filled, user content preserved.
+# Case 5: existing vault with .obsidian/ + user content — accepted, Agent-Brain/ created, user content preserved.
 mkdir -p "$tmp/real-vault/.obsidian"
-mkdir -p "$tmp/real-vault/Inbox"
+mkdir -p "$tmp/real-vault/Inbox" "$tmp/real-vault/Daily Notes"
 echo "user note body" > "$tmp/real-vault/Inbox/note.md"
+echo "daily entry" > "$tmp/real-vault/Daily Notes/2026-05-17.md"
 if ! bash "$CONNECT" "$tmp/real-vault" >/dev/null; then
   printf "existing-vault connect failed\n" >&2; exit 1
 fi
 if ! grep -q "user note body" "$tmp/real-vault/Inbox/note.md"; then
-  printf "connect overwrote user content\n" >&2; exit 1
+  printf "connect overwrote user content (Inbox)\n" >&2; exit 1
 fi
-[ -f "$tmp/real-vault/_meta/AGENTS.md" ] || { printf "AGENTS.md not added\n" >&2; exit 1; }
-[ -f "$tmp/real-vault/templates/project-research.md" ] || { printf "project template not added\n" >&2; exit 1; }
+if ! grep -q "daily entry" "$tmp/real-vault/Daily Notes/2026-05-17.md"; then
+  printf "connect overwrote user content (Daily Notes)\n" >&2; exit 1
+fi
+[ -f "$tmp/real-vault/Agent-Brain/_meta/AGENTS.md" ] || { printf "AGENTS.md not added\n" >&2; exit 1; }
+[ -f "$tmp/real-vault/Agent-Brain/templates/project-research.md" ] || { printf "project template not added\n" >&2; exit 1; }
 got=$(cat "$BRAIN_VAULT_CONFIG")
 if [ "$got" != "$tmp/real-vault" ]; then
   printf "persisted path not updated\n" >&2; exit 1
+fi
+
+# Case 5b: resolve-brain returns vault + /Agent-Brain.
+brain_resolved=$(bash "$RESOLVE_BRAIN")
+if [ "$brain_resolved" != "$tmp/real-vault/Agent-Brain" ]; then
+  printf "resolve-brain wrong: %s\n" "$brain_resolved" >&2; exit 1
+fi
+
+# Case 5c: BRAIN_SUBDIR override flows through resolve-brain.
+brain_custom=$(BRAIN_SUBDIR="My-AI" bash "$RESOLVE_BRAIN")
+if [ "$brain_custom" != "$tmp/real-vault/My-AI" ]; then
+  printf "BRAIN_SUBDIR not honored by resolve-brain: %s\n" "$brain_custom" >&2; exit 1
 fi
 
 # Case 6: resolve-vault prefers the persisted config.

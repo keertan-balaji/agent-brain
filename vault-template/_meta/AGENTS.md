@@ -6,26 +6,32 @@ created: 2026-05-17
 updated: 2026-05-17
 ---
 
-# Vault contract for AI coding agents
+# Brain contract for AI coding agents
 
-If you are an AI coding agent (Claude Code, GitHub Copilot, Cursor, Aider, etc.) with filesystem access to this vault, read this file first.
+If you are an AI coding agent (Claude Code, GitHub Copilot, Cursor, Aider, etc.) with filesystem access to the user's Obsidian vault, read this file first.
+
+## Scope — Agent-Brain only
+
+This file lives at `<vault>/Agent-Brain/_meta/AGENTS.md`. **Your entire operating territory is `<vault>/Agent-Brain/`** — the subdirectory you are reading this from. Everything else in the vault (the user's own notes, daily journal, references, anything outside Agent-Brain/) is off-limits: don't read it speculatively, don't write to it, don't grep across it.
+
+All paths below are relative to `<vault>/Agent-Brain/`.
 
 ## Purpose
 
-This vault is a persistent, organized second brain. Use it to recall context before non-trivial work, and to capture decisions, gotchas, and patterns at the end of substantive work. The goal is to *save* your context and the user's time — not to add bookkeeping.
+This namespace is a persistent, organized second brain. Use it to recall context before non-trivial work, and to capture decisions, gotchas, and patterns at the end of substantive work. The goal is to *save* your context and the user's time — not to add bookkeeping.
 
 ## Read budget
 
 Before reading anything, search. Before reading everything, read targeted.
 
-- Use ripgrep (`rg`) or grep for keyword search across the vault.
+- Use ripgrep (`rg`) or grep for keyword search, **scoped to `Agent-Brain/`**.
 - Rank search hits by path priority: `knowledge/` > `projects/<current-repo>/` > `agent-memory/` > `daily/`.
 - Read at most 3–5 notes per recall round. If you need more, narrow the query.
 - When summarizing for yourself or another agent, emit ≤500 tokens with note titles cited — never dump raw bodies.
 
 ## Project bootstrap is mandatory
 
-**When you start work on a new project, your first vault action is to create `projects/<project-name>/`.** This is non-negotiable. A project is anything that spans more than a single one-shot exchange: a new repo, a research question, an audit, a migration.
+**When you start work on a new project, your first action in this namespace is to create `projects/<project-name>/`.** This is non-negotiable. A project is anything that spans more than a single one-shot exchange: a new repo, a research question, an audit, a migration.
 
 The bootstrap creates:
 
@@ -50,6 +56,7 @@ Claude Code agents: invoke `obsidian-project-bootstrap` skill. Other agents: fol
 
 ## Write rules
 
+- **Stay inside `Agent-Brain/`.** Never create, edit, or delete files anywhere else in the vault.
 - **Always bootstrap a project before capturing notes that belong to it** (see above). `agent-memory/` captures during project work should carry `project: <name>` in their frontmatter to attach back to the project.
 - Write freely to `agent-memory/`, `projects/`, and `daily/`.
 - **Do not** write to `knowledge/` directly. That section is human-curated. Notes graduate there via the `obsidian-curate` workflow.
@@ -79,10 +86,10 @@ The user's Obsidian app may have the same file open. Mitigation:
 
 If you are Claude Code, five skills wrap these conventions:
 
-- `obsidian-setup` — first-run; ask the user where the vault is, scaffold gaps, persist the choice.
+- `obsidian-setup` — first-run; ask the user where the vault is, scaffold the `Agent-Brain/` namespace inside it, persist the choice.
 - `obsidian-project-bootstrap` — **mandatory** at the start of every new project.
 - `obsidian-map-repo` — onboard a coding repo: bootstrap project + scan stack/tree/README/git into `repo-map.md`.
-- `obsidian-recall` — search → rank → synthesize.
-- `obsidian-capture` — pick template → fill frontmatter → write.
+- `obsidian-recall` — search → rank → synthesize (scoped to `Agent-Brain/`).
+- `obsidian-capture` — pick template → fill frontmatter → write (inside `Agent-Brain/`).
 
-If you are not Claude Code, follow the conventions in this file directly using your native filesystem tools.
+If you are not Claude Code, follow the conventions in this file directly using your native filesystem tools, scoped to this directory.

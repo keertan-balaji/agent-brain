@@ -28,7 +28,8 @@ Coding agents waste time and context every session rediscovering enterprise know
 
 | Skill | When to use |
 |---|---|
-| `obsidian-setup` | First run; reconfigure vault path; verify install |
+| `obsidian-setup` | First run; asks where your vault is (Obsidian Sync path or default), scaffolds gaps, persists choice |
+| `obsidian-project-bootstrap` | **Mandatory** — first action on any new project |
 | `obsidian-recall` | Before non-trivial work; when topic mentioned; before brainstorming |
 | `obsidian-capture` | After non-trivial decision; gotcha hit; pattern emerged |
 

@@ -53,8 +53,8 @@ Pick exactly one. If genuinely unclear, use `generic` and refine later by editin
 ### Step 3 — bootstrap
 
 ```bash
-VAULT="${OBSIDIAN_VAULT:-$HOME/Documents/ObsidianVault}"
 BRAIN=/home/keertan/codes/brain
+VAULT=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
 path=$(bash "$BRAIN/skills/obsidian-project-bootstrap/scripts/bootstrap-project.sh" \
   "$VAULT" "<project-name>" "<task_type>" "<human-readable-title>")
 ```

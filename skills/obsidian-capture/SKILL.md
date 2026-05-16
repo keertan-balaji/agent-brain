@@ -49,7 +49,7 @@ Persist a finding to the vault so it shows up next time someone asks.
 ### Step 2 — generate the note shell
 
 ```bash
-VAULT="${OBSIDIAN_VAULT:-$HOME/Documents/ObsidianVault}"
+VAULT=$(bash skills/obsidian-setup/scripts/resolve-vault.sh)
 path=$(bash skills/obsidian-capture/scripts/make-note.sh \
   "$VAULT" "<type>" "<title>" "<tag,tag>" "<project-or-empty>")
 ```

@@ -41,8 +41,10 @@ Pull just-enough context from the vault before working.
 ### Step 1 — resolve vault
 
 ```bash
-VAULT="${OBSIDIAN_VAULT:-$HOME/Documents/ObsidianVault}"
+VAULT=$(bash skills/obsidian-setup/scripts/resolve-vault.sh)
 ```
+
+Honors env > persisted `.vault-path` > default. Set once via `obsidian-setup`.
 
 ### Step 2 — search
 

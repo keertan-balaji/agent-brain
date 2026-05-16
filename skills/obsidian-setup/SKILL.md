@@ -1,76 +1,113 @@
 ---
 name: obsidian-setup
-description: Use when the user wants to install or repair the Obsidian second-brain vault, when no vault exists at the configured path, or when other obsidian-* skills fail with "vault not found". Idempotent — safe to run repeatedly.
+description: Use FIRST when wiring up this skill pack — whether the user has an existing Obsidian vault (Obsidian Sync, custom location) or wants a fresh one at the default path. Asks the user where the vault is, validates the path, fills any missing structural pieces without overwriting user content, and persists the choice so every other obsidian-* skill resolves to the same vault. Idempotent — safe to re-run.
 ---
 
 # obsidian-setup
 
-Set up or repair the Obsidian vault used by the second-brain skill pack.
+Connect this skill pack to a vault and remember which one.
 
 ## When to use
 
-- User runs `/obsidian-setup`, says "set up brain", or first-runs the pack.
-- Another `obsidian-*` skill fails because the vault directory doesn't exist or is incomplete.
-- The user changed vault location and wants to re-bootstrap.
+- First run after install.
+- User says: "set up obsidian", "connect to my vault", "/obsidian-setup", "use my Obsidian Sync vault".
+- User mentions Obsidian Sync, iCloud-/Dropbox-/Syncthing-backed vaults, or any non-default vault location.
+- Another `obsidian-*` skill failed because the vault wasn't found or pointed at the wrong place.
+- User changed vault location and wants to re-point.
 
 ## What it does
 
-1. Determine vault path. Default: `$HOME/Documents/ObsidianVault/`. Honors `OBSIDIAN_VAULT` env var or a path the user supplies.
-2. Run `scaffold-vault.sh <path>`. Creates required directory tree. Copies template files (AGENTS.md, MOC.md, schema, linking conventions, note templates) only where missing — never overwrites existing files.
-3. Ensure the vault path is in Claude Code's `additionalDirectories` so Read/Edit/Write/Grep can reach it.
-4. Verify by running the frontmatter validator on `_meta/AGENTS.md`.
-5. Report path, files copied vs skipped, and next-step suggestions.
+1. **Resolve current state.** Read whichever path is already in effect (env > persisted choice > default).
+2. **Ask the user** to confirm or change the vault path.
+3. **Validate** the chosen path: exists, is a directory, readable+writable.
+4. **Classify**: existing Obsidian vault (has `.obsidian/`), empty directory (will be scaffolded), or non-empty plain directory (warn but proceed).
+5. **Fill structural gaps** via `scaffold-vault.sh`. Only adds missing `_meta/`, `templates/`, section dirs — never overwrites user content.
+6. **Persist** the absolute path to `<brain-repo>/.vault-path` (or `$BRAIN_VAULT_CONFIG` if set). All other skills read this via `resolve-vault.sh`.
+7. **Surface permissions reminder.** If the path isn't already in Claude Code's `additionalDirectories`, tell the user; don't edit `~/.claude/settings.json` autonomously.
 
 ## How
 
-### Step 1 — pick the path
+### Step 1 — show the current state
 
 ```bash
-VAULT="${OBSIDIAN_VAULT:-$HOME/Documents/ObsidianVault}"
+BRAIN=/home/keertan/codes/brain
+current=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
 ```
 
-If the user named a different path, use that. Otherwise the default.
+This prints whichever path would be used right now: `$OBSIDIAN_VAULT` env > persisted `.vault-path` > default `$HOME/Documents/ObsidianVault`.
 
-### Step 2 — scaffold
+### Step 2 — ask the user
 
-Run from this repo root:
+Invoke `AskUserQuestion`:
+
+- **Question**: `Where is your Obsidian vault?`
+- **Header**: `Vault path`
+- **Options**:
+  1. label: `Use current: <current>` — description: `Keep the path already in effect.`
+  2. label: `Other` — description: `Type a different path. Use this if you have an Obsidian Sync vault or a custom location.`
+
+If the user picks "Other", they type the path. Treat `~` and shell variables literally — if they paste `~/notes`, expand it before passing it on (`path="${typed/#\~/$HOME}"`).
+
+### Step 3 — connect
 
 ```bash
-bash skills/obsidian-setup/scripts/scaffold-vault.sh "$VAULT"
+chosen=$(bash "$BRAIN/skills/obsidian-setup/scripts/connect-vault.sh" "<path>")
 ```
 
-Expect output of the form `vault scaffolded at <path> (copied=N skipped=M)`.
+The script:
+- validates the path,
+- runs the scaffold to fill gaps (existing files preserved),
+- writes the absolute path to `.vault-path`,
+- echoes the resolved absolute path.
 
-### Step 3 — wire Claude Code permissions
-
-Read `~/.claude/settings.json`. If the `additionalDirectories` array does not include the vault path, add it. Preserve existing keys and array entries. If the file does not exist, create it with the minimal shape:
-
-```json
-{
-  "additionalDirectories": ["<vault-path>"]
-}
-```
-
-Always re-read before write and merge — never blindly overwrite. If `permissions` or other top-level keys exist, leave them untouched.
+If it errors, surface the message and re-ask.
 
 ### Step 4 — verify
 
 ```bash
-bash skills/obsidian-capture/scripts/validate-frontmatter.sh "$VAULT/_meta/AGENTS.md"
+bash "$BRAIN/skills/obsidian-capture/scripts/validate-frontmatter.sh" "$chosen/_meta/AGENTS.md"
 ```
 
-Exit 0 = vault is healthy.
+Exit 0 = the vault is wired up.
 
-### Step 5 — report
+### Step 5 — permissions reminder (do not edit settings yourself)
 
-Tell the user:
-- vault path
-- copied / skipped counts
-- next suggested skills: `obsidian-recall <topic>` and `obsidian-capture <type>`
+Check whether `$chosen` is listed in `~/.claude/settings.json` under `permissions.additionalDirectories`. If not, tell the user:
+
+> Vault connected: `<path>`. To let Claude Code's native Read/Edit/Write/Grep tools reach the vault, add it to `~/.claude/settings.json`:
+>
+> ```json
+> "permissions": { "additionalDirectories": ["<path>"] }
+> ```
+>
+> The skills work via Bash without this, but the native file tools will be blocked from the vault until you add it.
+
+Don't edit the settings file yourself — auto-mode rightly blocks agents from granting themselves filesystem access.
+
+### Step 6 — confirm
+
+Report: `Vault connected: <path>` plus the next-step suggestion (`/obsidian-project-bootstrap` if a project is in flight, `/obsidian-recall <topic>` to test reading).
+
+## Resolution contract for other skills
+
+Every other `obsidian-*` skill (and their helper scripts) resolves the vault by calling:
+
+```bash
+VAULT=$(bash "$BRAIN/skills/obsidian-setup/scripts/resolve-vault.sh")
+```
+
+Order: `$OBSIDIAN_VAULT` env → `.vault-path` file → `$HOME/Documents/ObsidianVault` fallback. Once `obsidian-setup` runs, every subsequent skill follows.
 
 ## Don't
 
-- Don't overwrite user-edited files. The scaffold script handles this; trust it.
-- Don't write into `knowledge/` — that's human-curated.
-- Don't pre-populate seed notes beyond what `vault-template/` ships. Vault sprawl starts here.
-- Don't add the vault path to `additionalDirectories` more than once — check before append.
+- Don't ask the user for the path more than once per session.
+- Don't run this skill unprompted when a vault is already connected and working.
+- Don't trust the path without validating — the helper does this; respect its errors.
+- Don't move or copy user content from one vault into another. Vault consolidation is a manual operation.
+- Don't edit `~/.claude/settings.json` yourself. Surface the snippet, let the user apply it.
+- Don't write into `knowledge/` — that section is human-curated.
+
+## Related skills
+
+- `obsidian-project-bootstrap` — mandatory after setup, on every new project.
+- `obsidian-recall` / `obsidian-capture` — both honor the connected vault automatically via the resolver.

@@ -79,7 +79,7 @@ The user's Obsidian app may have the same file open. Mitigation:
 
 If you are Claude Code, four skills wrap these conventions:
 
-- `obsidian-setup` — first-run vault scaffolding and config.
+- `obsidian-setup` — first-run; ask the user where the vault is, scaffold gaps, persist the choice.
 - `obsidian-project-bootstrap` — **mandatory** at the start of every new project.
 - `obsidian-recall` — search → rank → synthesize.
 - `obsidian-capture` — pick template → fill frontmatter → write.

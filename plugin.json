@@ -1,0 +1,11 @@
+{
+  "name": "obsidian-second-brain",
+  "version": "0.1.0",
+  "description": "Skill pack that turns an Obsidian vault into a persistent second brain for coding agents. Filesystem-direct, no MCP, agent-agnostic.",
+  "author": "keertan",
+  "skills": [
+    "skills/obsidian-setup",
+    "skills/obsidian-recall",
+    "skills/obsidian-capture"
+  ]
+}

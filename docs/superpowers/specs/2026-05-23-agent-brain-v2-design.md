@@ -36,7 +36,7 @@ This design is informed by a survey of the 2026 agent-memory field. Closest anal
 | Capability | Status in the field | What we ship |
 |---|---|---|
 | Tool-call / command-output preservation | Conversational only (Mem0, Letta, Zep) | First-class `tool_call_event` table |
-| Failure memory as typed entity | Missing in popular frameworks | First-class `failure_memory` type |
+| Failure memory as typed entity | Missing in popular frameworks | First-class `failure_memories` table with typed columns (target_problem, attempted_approach, root_cause, lesson, retry_count) — see §Failure memory |
 | Compaction-survival bundle | Letta paging is closest, heavy | Pre-computed `session_resume_bundle` per active project |
 | Cross-tool portability | Documented gap (MemPalace etc. partial) | Postgres + Anthropic Skills format ⇒ portable to Claude/Codex/Cursor/Gemini |
 | Provenance per claim | Best-in-class systems do span-level | Same: every retrieval returns source URI + char span |
@@ -102,7 +102,7 @@ CREATE TABLE sources (
                                         -- 'note' | 'paper' | 'code_file' | 'web_page' | …
   uri             TEXT,                 -- e.g. file://… or https://… or tool://Bash/123
   content         TEXT NOT NULL,        -- the actual text — never truncated, never lossy
-  content_hash    BYTEA NOT NULL,       -- sha256 of content for dedup
+  content_hash    BYTEA NOT NULL,       -- sha256 of content for dedup lookups (not unique — see re-assertion)
   mime            TEXT,                 -- 'text/plain', 'text/markdown', 'application/x-python', …
   tokens          INT,                  -- approximate token count
   lang            TEXT,                 -- language code if applicable
@@ -120,7 +120,25 @@ CREATE TABLE sources (
 );
 CREATE INDEX sources_kind_idx ON sources(kind);
 CREATE INDEX sources_validity_idx ON sources(t_valid_from, t_valid_to);
-CREATE UNIQUE INDEX sources_hash_idx ON sources(content_hash);
+-- Partial unique: only one CURRENTLY-VALID row per content hash. Invalidated rows free the slot.
+CREATE UNIQUE INDEX sources_hash_active_idx ON sources(content_hash) WHERE t_valid_to IS NULL;
+-- Non-unique hash index for dedup lookups across the whole history.
+CREATE INDEX sources_hash_lookup_idx ON sources(content_hash);
+
+-- Auto-update updated_at on row mutation.
+CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER sources_touch BEFORE UPDATE ON sources
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+```
+
+**Re-assertion semantics** (the bi-temporal pattern in plain English):
+
+- Inserting content whose `content_hash` already exists in a currently-valid row is a no-op (return the existing `id`).
+- Editing existing content: the old row is invalidated (`t_valid_to = NOW()`, `invalidation_reason` set), a new row inserted with the new content. Downstream pointers (events, classifications) continue to reference the old `id` — historical correctness preserved.
+- Re-asserting previously-invalidated content (same hash, now valid again): a new row is inserted; old invalidated row stays as history. The partial unique index permits this because only the new row has `t_valid_to IS NULL`.
+- This is enforced by the application-layer `brain.write()` API; the spec commits to a `find_active_by_hash → return_id_or_insert` flow rather than relying on database constraints alone.
 
 -- Full-text index, generated from content.
 CREATE TABLE sources_fts (
@@ -129,28 +147,65 @@ CREATE TABLE sources_fts (
 );
 CREATE INDEX sources_fts_idx ON sources_fts USING GIN(tsv);
 
--- Embeddings. Multiple per source allowed (different models).
-CREATE TABLE embeddings (
+-- Embeddings. Multiple per source allowed (different models, different versions).
+-- pgvector requires a fixed dimension per HNSW-indexed column, so we partition the
+-- embedding store by dimension: one table per dim. v2.0 ships embeddings_1024
+-- (BGE-M3 dense, mxbai-embed-large-v1, voyage-3 at 1024d). Adding a new dim is a
+-- new migration that creates embeddings_<dim>.
+CREATE TABLE embeddings_1024 (
   source_id  BIGINT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-  model_id   TEXT NOT NULL,             -- 'openai/text-embedding-3-large' | 'nomic-embed-text-v2' | …
-  model_ver  TEXT NOT NULL,             -- specific version tag
-  dim        INT NOT NULL,              -- 768 / 1024 / 3072 …
-  vec        HALFVEC NOT NULL,          -- float16, 50% storage vs float32
+  model_id   TEXT NOT NULL,             -- 'bge-m3' | 'mxbai-embed-large-v1' | 'voyage-3-large' …
+  model_ver  TEXT NOT NULL,             -- specific version tag (e.g. '2024-06', 'v1.5')
+  vec        HALFVEC(1024) NOT NULL,    -- float16; fixed dim required for HNSW
   embedded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (source_id, model_id, model_ver)
 );
-CREATE INDEX embeddings_hnsw_idx ON embeddings
+CREATE INDEX embeddings_1024_hnsw_idx ON embeddings_1024
   USING hnsw (vec halfvec_cosine_ops) WITH (m = 16, ef_construction = 64);
+-- Partial index per active model speeds the common-case query.
+CREATE INDEX embeddings_1024_active_idx ON embeddings_1024(model_id, model_ver);
 
--- Memory taxonomy: every source belongs to exactly one bucket.
+-- Active embedding configuration. The retrieval layer reads `active_embedding` to
+-- pick which (model_id, model_ver) to filter on. Changing this is a deliberate act —
+-- re-embedding the corpus is a separate migration.
+CREATE TABLE brain_config (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Seeded at install:
+--   ('active_embedding_model_id', 'bge-m3')
+--   ('active_embedding_model_ver', '2024-06')
+--   ('active_embedding_dim', '1024')
+
+-- Memory taxonomy: a source can belong to multiple buckets (e.g., a failure is
+-- both `failure` AND `episodic`; a curated decision becomes `semantic` while
+-- remaining `episodic` for the originating session).
 CREATE TABLE memory_classifications (
-  source_id  BIGINT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
+  source_id  BIGINT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
   bucket     TEXT NOT NULL CHECK (bucket IN ('semantic', 'episodic', 'procedural', 'failure')),
   classified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  classifier TEXT NOT NULL                 -- 'agent' | 'hook' | 'user' | 'auto-router'
+  classifier TEXT NOT NULL,                -- 'agent' | 'hook' | 'user' | 'auto-router'
+  PRIMARY KEY (source_id, bucket)
 );
 CREATE INDEX memory_classifications_bucket_idx ON memory_classifications(bucket);
 ```
+
+**Bucket-assignment rules** (pre-resolves ambiguous cases the reviewer flagged):
+
+| Source kind | Buckets assigned |
+|---|---|
+| `decision` (during work) | `episodic` (in the session) + `semantic` (the reasoning) |
+| `decision` (curated, promoted) | `semantic` only (the originating event row remains episodic) |
+| `gotcha` / `blocker` / failed attempt | `failure` + `episodic` |
+| `pattern` / recipe / heuristic | `procedural` |
+| `pattern` derived from repeated failures | `procedural` + `failure` |
+| `tool_call` / `command` / `observation` | `episodic` only |
+| `architecture` / `api` / `glossary` / `process` | `semantic` only |
+| `paper` / `code_file` / `web_page` (external ingest) | `semantic` only |
+| `session_summary` / `subtask_summary` | `episodic` only |
+
+The classifier (extending the existing `agent-store-decide` skill) applies these rules at capture time.
 
 ### Episodic stream (sessions → subtasks → events)
 
@@ -197,9 +252,9 @@ CREATE TABLE events (
   source_id    BIGINT REFERENCES sources(id),  -- semantic note attached to event
   status       TEXT,                     -- 'ok' | 'error' | 'timeout' | 'denied'
   duration_ms  INT,
-  occurred_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  occurred_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, ordinal)
 );
-CREATE INDEX events_session_ordinal_idx ON events(session_id, ordinal);
 CREATE INDEX events_subtask_idx ON events(subtask_id);
 ```
 
@@ -229,18 +284,107 @@ CREATE TABLE edges (
 );
 ```
 
-### Compaction-survival
+### Failure memory (typed entity, not just a tag)
+
+Failure memory is a load-bearing differentiator — promoted from a string-tag to a real table joined to `sources`. The `sources` row holds the narrative; the typed columns are what makes "you tried this 2 weeks ago" a structured lookup, not a hopeful vector hit.
 
 ```sql
--- Pre-computed "what should be in context next session" bundles, per project.
-CREATE TABLE session_resume_bundles (
-  project_id    BIGINT NOT NULL REFERENCES projects(id),
-  generated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  manifest      JSONB NOT NULL,          -- ordered list of source_ids with rationale
-  rendered      TEXT NOT NULL,           -- the ≤500-token brief, ready to paste
-  PRIMARY KEY (project_id, generated_at)
+CREATE TABLE failure_memories (
+  id                 BIGSERIAL PRIMARY KEY,
+  source_id          BIGINT NOT NULL REFERENCES sources(id),   -- narrative body lives here
+  target_problem     TEXT NOT NULL,            -- "install Postgres + pgvector on Arch"
+  attempted_approach TEXT NOT NULL,            -- "docker-compose with pgvector image"
+  outcome_evidence   TEXT,                     -- pointer or quote demonstrating the failure
+  root_cause         TEXT,                     -- once identified
+  lesson             TEXT,                     -- the rule-of-thumb to remember
+  retry_count        INT NOT NULL DEFAULT 1,
+  last_attempted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  first_attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  project_id         BIGINT REFERENCES projects(id),
+  t_valid_from       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  t_valid_to         TIMESTAMPTZ,
+  -- Deduplication key: a re-attempt of the same approach for the same problem
+  -- finds the existing row and bumps retry_count rather than creating a new row.
+  UNIQUE (target_problem, attempted_approach)
 );
+CREATE INDEX failure_memories_problem_idx ON failure_memories USING GIN(to_tsvector('english', target_problem));
+CREATE INDEX failure_memories_approach_idx ON failure_memories USING GIN(to_tsvector('english', attempted_approach));
 ```
+
+Recall flow: when an agent is about to attempt approach A for problem P, the brain runs `failure_memories WHERE target_problem ~ P AND attempted_approach ~ A AND t_valid_to IS NULL` (with fuzzy match via tsvector or vector similarity on the two columns). A hit → surface "you tried this before, retry_count=N, lesson: …" before the agent commits the attempt.
+
+Invalidation: if the same approach later succeeds (root cause was environmental, since fixed), the failure row is invalidated with `invalidation_reason='superseded by success at <event_id>'`. The history is preserved.
+
+### Compaction-survival bundles (the headline feature)
+
+The single most important mechanism in the brain. When Claude Code is about to compact a conversation, or when a session ends, the brain produces a deterministic bundle that captures everything an agent would need to resume — and stores it for the next session to read.
+
+```sql
+CREATE TABLE session_resume_bundles (
+  id            BIGSERIAL PRIMARY KEY,
+  project_id    BIGINT NOT NULL REFERENCES projects(id),
+  session_id    BIGINT REFERENCES sessions(id),    -- the session this bundle summarizes
+  trigger       TEXT NOT NULL CHECK (trigger IN ('pre_compact','session_end','manual')),
+  generated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  superseded_at TIMESTAMPTZ,                       -- when a newer bundle replaced this
+  token_budget  INT NOT NULL,                      -- target size at generation time
+  manifest      JSONB NOT NULL,                    -- structured: see below
+  rendered      TEXT NOT NULL                      -- ready-to-paste markdown brief
+);
+CREATE INDEX bundles_project_active_idx ON session_resume_bundles(project_id, generated_at DESC)
+  WHERE superseded_at IS NULL;
+```
+
+**Manifest schema:**
+
+```json
+{
+  "active_subtask": { "id": 123, "title": "...", "goal": "...", "open_threads": [...] },
+  "recent_decisions": [{ "source_id": 456, "summary": "...", "rationale": "...", "weight": 0.9 }],
+  "recent_failures": [{ "failure_id": 78, "target": "...", "lesson": "...", "weight": 0.7 }],
+  "recent_files_touched": ["path/a.py", "path/b.sh"],
+  "recent_commands_succeeded": ["bash tests/run-all.sh", "psql -c '\\dt'"],
+  "recent_commands_failed": [{ "cmd": "docker compose up", "exit": 1, "tail": "..." }],
+  "relevant_knowledge": [{ "source_id": 901, "title": "...", "weight": 0.5 }],
+  "open_questions": ["should we install pgvector via apt or build from source?"]
+}
+```
+
+**Selection algorithm (deterministic, in order):**
+
+1. **Active subtask** — the `subtasks` row for this session with `ended_at IS NULL`, plus its goal and any events with `kind='blocker'` whose resolution is missing.
+2. **Recent decisions** — last 10 `events.kind='decision'` rows in this session, ordered by recency, then deduplicated against the project's promoted-to-`semantic` decisions to avoid repeating durable facts.
+3. **Recent failures** — `failure_memories` with `last_attempted_at` in this session OR `target_problem` matching any active subtask goal (fuzzy). Cap 5.
+4. **Files / commands** — last 20 `events.kind='tool_call'` rows, partitioned by `status='ok'` vs `status!='ok'`.
+5. **Relevant knowledge** — top-5 hits from `retrieval_log` in this session, weighted by `selected` count (if known).
+6. **Open questions** — `events.kind='reflection'` rows ending in `?` or carrying frontmatter flag `open_question: true`, this session, unresolved.
+
+**Token budget enforcement (default 500 tokens):**
+
+Each category gets a soft allocation:
+- active_subtask: 100 tok
+- recent_decisions: 120 tok
+- recent_failures: 80 tok
+- files/commands: 60 tok
+- relevant_knowledge: 80 tok
+- open_questions: 60 tok
+
+If a category exceeds its allocation, items are dropped in reverse selection order (lowest weight first). Total enforced via `tokens` accumulator. If total > budget after all categories, render with `[truncated]` marker and a "see full bundle: brain bundle show <id>" pointer.
+
+**Lifecycle:**
+
+- `PreCompact` hook (Claude Code) generates a bundle with `trigger='pre_compact'`. The bundle is rendered into the agent's next message via the hook's stdout, AND persisted for later inspection.
+- `Stop` hook generates a `trigger='session_end'` bundle; this is what `SessionStart` consumes next session.
+- `SessionStart` reads the most recent un-superseded bundle for the active project (via `bundles_project_active_idx`). If `generated_at` is > 14 days old, it regenerates rather than using the stale one.
+- Manual: `brain bundle generate --project <slug>` for testing or before a planned context wipe.
+
+**Retention:**
+
+- Active bundles (one per project, `superseded_at IS NULL`) — keep forever.
+- Superseded bundles — kept 30 days for retrospective inspection, then archived (manifest preserved, rendered text discarded).
+- `brain health` reports oldest-active-bundle age; bundles >14 days old in active projects are flagged.
+
+**Compliance assertion:** if a session contains <3 captured events when `Stop` fires, the bundle generator emits a warning into the rendered bundle: `⚠ Session under-captured (N events). Resume context is partial.` This is the enforcement teeth for §Compliance (see below).
 
 ### Anthropic Skills (procedural memory mirror)
 
@@ -282,7 +426,7 @@ Configured in `~/.claude/settings.json` (user installs once). Hooks call a Pytho
 
 | Hook | Action |
 |---|---|
-| `PostToolUse` | Insert `events` row + truncated head/tail of output into `sources` (under `kind='tool_call'`). Bash output capped at 4KB head + 4KB tail by default, configurable. |
+| `PostToolUse` | Insert `events` row + truncated output into `sources` (under `kind='tool_call'`). Bash output capture: **head + tail + error-span preservation**. Default: 4KB head + 4KB tail, PLUS any lines matching `(FAIL|ERROR|panic|trace|exception|Traceback)` from anywhere in the middle (capped at 4KB additional). Each retained span is delimited; truncation gap shows `[N lines elided]`. Configurable via `brain_config.tool_output_cap`. |
 | `PreCompact` | Generate a `session_resume_bundle` snapshotting current state before the compactor runs. |
 | `SessionStart` | If a resume bundle exists for the active project, agent should consult it. |
 | `Stop` | Finalize current session row: set `ended_at`, generate session summary, classify session into memory buckets. |
@@ -290,7 +434,17 @@ Configured in `~/.claude/settings.json` (user installs once). Hooks call a Pytho
 
 The hooks are installed by the setup skill (opt-in, gated on user approval) and edit `~/.claude/settings.json` carefully.
 
-Cross-platform: Codex CLI v0.128+ has analogous lifecycle events; an adapter layer translates. Cursor and Gemini lack equivalent hooks today — those agents rely on Path 1 + Path 3.
+Cross-platform: Codex CLI v0.128+ has analogous lifecycle events; an adapter layer ships in Phase 4. Cursor and Gemini lack equivalent hooks today.
+
+**Non-Claude user experience in Phase 1–2:**
+
+Cursor / Gemini / Aider users don't get hook-driven capture. Their workflow during Phase 1–2:
+
+1. At session start, manually run `brain resume <project>` in the terminal; paste the rendered bundle into the agent's chat.
+2. During the session, the agent uses Path 1 (proactive captures via the `brain` CLI) — the AGENTS.md contract directs them to do so explicitly.
+3. At session end, manually run `brain session end` to trigger summary + bundle generation.
+
+This is degraded vs Claude Code's automatic flow, and the spec is explicit about it. Phase 4's MCP server closes the gap by exposing brain operations as MCP tools that those agents can call as if they were native.
 
 ### Path 3: user-explicit
 
@@ -298,6 +452,16 @@ Two surfaces:
 
 - CLI: `brain remember "<text>"`, `brain link <slug> <slug>`, `brain invalidate <id>`.
 - Obsidian: user edits a markdown file directly; a file-watcher Python helper detects the change, re-ingests, and updates rows. (Obsidian write → markdown is the source of one ingestion path; the canonical Postgres row is updated.)
+
+## Compliance (enforcement of "the agent must comply")
+
+v1's enforcement was implicit hope. v2 adds three teeth:
+
+1. **`Stop` hook capture-completeness check.** When a session ends, count `events` and `subtask_summary` rows written. If the session had ≥ 5 Claude turns (detectable from session transcript metadata) AND < 3 capture events, the bundle generator marks the session under-captured. `brain health` surfaces under-captured sessions in its report.
+2. **Bundle-generator quality signal.** A session that produces a near-empty bundle (no active subtask, no decisions, no failures) is auto-flagged in `sessions.summary_id` as a "thin session." Repeated thin sessions for the same project trigger a `brain status` warning recommending review.
+3. **Optional strict mode.** Users opt in via `brain_config.key = 'strict_mode' value = 'true'`. When strict, the `Stop` hook returns a non-zero exit if the session is under-captured, surfacing a system-reminder visible to the next session. This is opt-in because false positives during exploratory or one-shot work would create friction.
+
+Compliance is observability + nudges, not a hard block. The brain cannot literally compel an LLM to capture; it can make non-capture visible, persistent, and uncomfortable.
 
 ## Memory taxonomy (LangMem canonical)
 
@@ -314,15 +478,32 @@ The router (in capture path) classifies each new source. The classifier is the e
 
 **Stack (locked in by prior research, refined by FP/FN research):**
 
-1. **Metadata pre-filter** — every retrieval first narrows by `project_id`, `t_valid` covers now, `bucket`, optional `kind` / `status`.
+1. **Metadata pre-filter** — every retrieval first narrows by `project_id`, `t_valid_to IS NULL`, `bucket`, optional `kind` / `status`.
 2. **Hybrid candidate generation, parallel:**
    - Postgres FTS (BM25-like via `ts_rank_cd`) over `sources_fts.tsv`. k=100.
-   - pgvector kNN over `embeddings.vec` with HNSW. k=100.
+   - pgvector kNN over `embeddings_1024.vec` with HNSW. k=100. **Always** filtered by `model_id = $active AND model_ver = $active_ver` (read from `brain_config`) — never compare across embedding models.
 3. **Reciprocal Rank Fusion (RRF)** to fuse the two lists. One-line algorithm, no score normalization needed.
-4. **Cross-encoder rerank** of top 30–50 candidates. BGE-reranker-v2 as default (local model). Cohere Rerank or ColBERT plug-in as alternatives.
+4. **Cross-encoder rerank** of top 30–50 candidates. mxbai-rerank-large-v2 as default (local model). Cohere Rerank or ColBERT plug-in as alternatives.
 5. **Return top 5–10** with provenance (source URI, span, score).
 
-**FP/FN-specific hardening:** *(filled in after research subagent returns; see §Retrieval hardening below)*
+**SLO tiers** — not every recall pays the same cost:
+
+| Tier | Pipeline | Target latency | Used by |
+|---|---|---|---|
+| Fast (default) | metadata + FTS + dense + RRF + rerank | p99 < 500ms | inline agent calls (`brain.recall` from a skill) |
+| Deep | + multi-query fusion + CRAG verification gate | p99 < 3s | explicit `brain.recall --deep`, bundle generation, research queries |
+| Bulk | + decomposition + iterative retrieve | p99 < 15s | `brain.research`, hand-off generation |
+
+Success criterion #7 ("skill loop unchanged in latency vs v1 bash-only") applies to the Fast tier only. Deep and Bulk tiers have separate budgets and are opt-in per call.
+
+**Embedding-model swap protocol.** Changing `brain_config.active_embedding_model_*` is a deliberate operation:
+
+1. New rows go into `embeddings_<dim>` with the new `(model_id, model_ver)`.
+2. Existing rows are re-embedded in batches by a background job (`brain reindex --to <model>`).
+3. Until reindex completes, retrieval reads the OLD active model. The config flip happens only when 100% of currently-valid sources have an embedding under the new model. `brain status` shows progress.
+4. Old-model embeddings are kept until explicit cleanup (`brain reindex --gc-old`), so a rollback is one config flip away.
+
+**FP/FN-specific hardening:** see §Retrieval hardening below.
 
 ### Retrieval hardening (FP/FN minimization)
 
@@ -359,9 +540,9 @@ For agent-memory notes specifically (often pronoun- or header-dependent), use **
 
 For every chunk at ingest, generate a **chunk-context summary** (1–3 sentences placing the chunk in its document) via Claude Haiku. Prepend the summary to the chunk before embedding.
 
-- Empirical: 49% reduction in retrieval failures with FTS, 67% with FTS + reranker (Anthropic's numbers, replicated in 2025–26).
+- Empirical: 49% reduction in retrieval failures with FTS, 67% with FTS + reranker (Anthropic, Sep 2024 blog post, on Anthropic's own evaluation corpus). Independent 2025–26 replications confirm the direction; effect size varies by domain. We re-measure on our hand-curated eval set in §Eval rather than assuming the headline numbers transfer to coding-agent memory.
 - Cost: ~$1.02 per 1M doc tokens with prompt caching. Negligible at personal-corpus scale.
-- Adoption: this is the highest-ROI single intervention in the field. Day-1 commitment.
+- Adoption: this is the highest-ROI single intervention in the field. Day-1 commitment in Phase 2.
 
 Implementation: `brain.ingest()` runs the contextualization step before writing the embedding row. The summary is also stored in `sources` as a separate row (`kind='chunk_context'`, `parent_id` pointing at the chunk) for transparency and re-use.
 
@@ -409,15 +590,30 @@ For ambiguous or recall-critical queries (auto-detected by query characteristics
 
 #### Verification (precision hardening, FP)
 
-**CRAG (Corrective RAG)** as the final gate:
+**CRAG (Corrective RAG)** as a conditional gate (NOT on the Fast-tier path):
 - LLM-as-judge scores each top-K candidate's relevance to the query.
 - 3-way verdict: ≥0.7 keep, ≤0.3 discard, else "merge" (combine with another candidate or expand search).
 - Cost: +100–800ms latency, one Claude Haiku call.
-- Implementation: `reasoning.verify(query, candidates)` runs as the last retrieval stage.
+- **Trigger conditions** (avoid blanket application — see §Retrieval SLO tiers):
+  1. Reranker top-1 score is in [0.5, 0.7) — confidence-band where verification helps most.
+  2. Caller explicitly requested `--deep` tier.
+  3. Query is in the `failure_memory` bucket (false negatives are especially costly there — see #4 success criterion).
+- Implementation: `reasoning.verify(query, candidates)` runs as the last retrieval stage when triggered.
 
-**Confidence threshold + abstain**:
-- If the reranker's top-1 score is below τ=0.7 (tunable), the system returns **"no high-confidence match"** rather than a weak result.
-- Empirically the single most effective FP guard. Abstain beats wrong.
+**Confidence threshold + abstain (per-bucket τ)**:
+
+Default thresholds at which the reranker's top-1 score causes the system to return "no high-confidence match":
+
+| Bucket | Default τ | Reason |
+|---|---|---|
+| `semantic` (curated facts) | 0.75 | High precision required; a wrong fact misleads more than no fact |
+| `episodic` (sessions, events) | 0.65 | Relevance is fuzzier; near-matches still useful for "show me what I was doing" |
+| `procedural` (recipes, skills) | 0.70 | Recipe misapplication is moderately costly |
+| `failure` (don't-do-this-again) | 0.55 | LOW intentionally — near-matches are the point ("you tried something kind of like this") |
+
+**τ-tuning protocol.** Initial values come from sweeping the hand-curated eval set (see §Eval) and picking the precision/recall knee per bucket. Re-tuning is triggered when `retrieval_log` shows the retrieved-vs-used ratio drops below 40% over 100 queries in a bucket (suggesting τ is too low — too many irrelevant results), or above 90% with frequent "no result" returns (suggesting τ is too high — abstaining when matches exist). `brain health` reports the rolling ratio per bucket.
+
+Abstain beats wrong is the policy, but failure memory specifically benefits from low τ — surfacing near-misses ("you tried something similar 2 weeks ago, here's the lesson") is the point.
 
 #### Provenance and consolidation tracking
 
@@ -441,12 +637,18 @@ This lets us detect:
 - **Recurrent recall misses** — same query, low scores, agent abandoned retrieval.
 - **Hard negatives** for future fine-tuning (Phase 4).
 
-#### Sanitization at ingest (poisoned-doc defense)
+#### Sanitization at ingest (poisoned-doc defense — Phase 2 minimum, Phase 4 hardening)
 
-Agent memory is a write-anything surface. Every ingested document runs through a sanitization pass:
-- Detect prompt-injection patterns (instruction-like text in surprising positions).
-- Strip ANSI escapes, control characters from tool outputs.
-- Flag (don't reject) suspicious content with `sources.flags={'suspicious': true, 'reason': ...}` — the agent sees the flag in retrieval results.
+Agent memory is a write-anything surface. The threat is real: a malicious file in a mapped repo, a `curl` output with injected instructions, a tool output containing "ignore previous instructions and …". The full threat model (referenced as `docs/security/threat-model.md`, written in Phase 4) is out of scope for v2.0; the Phase 2 minimum is documented here and explicitly limited.
+
+**Phase 2 minimum (specific, implementable):**
+
+1. **ANSI escape and control-character stripping** on `tool_call` and `command` content via `re.sub(r'\x1b\[[\d;]*[a-zA-Z]', '', text)` plus a non-printable-character filter. These break renders and have no value in stored content.
+2. **Instruction-density flagging** — a heuristic detector that counts occurrences of suspicious phrases (`ignore previous instructions`, `you are now`, `system:`, `disregard`, `new instructions`) per 1000 chars. If density exceeds 1.0, set `sources.flags = {'suspicious': true, 'reason': 'instruction_density', 'score': X}`.
+3. **Origin-aware quoting** — content from `kind IN ('tool_call', 'command', 'web_page')` is wrapped at retrieval time with a delimiter (`<tool-output>...</tool-output>`) so the consuming LLM treats it as data, not instructions. This is a render-time defense layered on the storage; both layers matter.
+4. **No rejection — only flagging.** Suspicious content still ingests. The agent sees the flag in retrieval results and can decide whether to trust it.
+
+Phase 4 adds: structural anomaly detection, embedding-time prompt-injection detection (Lakera-style), per-source provenance trust scores, optional opt-in rejection mode. v2.0 explicitly does not claim defense against motivated prompt-injection — only against accidental ingestion of obviously instruction-shaped text.
 
 #### What we adopt vs. defer
 
@@ -479,22 +681,73 @@ Agent memory is a write-anything surface. Every ingested document runs through a
 
 Each is a Python function exposed both as a CLI subcommand and as a skill. All operate over retrieval results, never against blind queries.
 
-| Helper | Input | Output |
-|---|---|---|
-| `summarize(source_ids[]) → text` | a set of sources | concise synthesis ≤500 tokens, with citations |
-| `compare(a_id, b_id) → text` | two sources | side-by-side analysis: agreements, disagreements, scope difference |
-| `contrast(query, candidate_ids[]) → text` | a question, candidates | which best answers, why others miss |
-| `cite(claim_text) → sources[]` | a natural-language claim | sources that support it, with character spans |
-| `extract_claims(source_id) → claims[]` | a paper / doc | structured claims (subject, predicate, object, qualifier) |
-| `propose_links(source_id) → candidate_ids[]` | a source | semantically/structurally related sources for `[[wikilinks]]` |
-| `generate_resume_bundle(project_id) → bundle` | a project | ≤500-token brief: active subtask, last decisions, open threads, top-N relevant chunks |
-| `trace_data_flow(start_symbol, repo) → graph` | a code symbol | call graph / data flow extracted from `entities` + `edges` |
+| Helper | Input | Output | LLM-grounded? |
+|---|---|---|---|
+| `summarize(source_ids[]) → text` | a set of sources | concise synthesis ≤500 tokens, with citations | yes |
+| `compare(a_id, b_id) → text` | two sources | side-by-side analysis: agreements, disagreements, scope difference | yes |
+| `contrast(query, candidate_ids[]) → text` | a question, candidates | which best answers, why others miss | yes |
+| `cite(claim_text) → sources[]` | a natural-language claim | sources that support it, with character spans | yes (entailment check) |
+| `extract_claims(source_id) → claims[]` | a paper / doc | structured claims (see schema below) | yes |
+| `propose_links(source_id) → candidate_ids[]` | a source | semantically/structurally related sources for `[[wikilinks]]` | no (pure retrieval) |
+| `generate_resume_bundle(project_id) → bundle` | a project | see §Compaction-survival bundles | partial (rendering only) |
+| `trace_data_flow(start_symbol, repo) → graph` | a code symbol | call graph / data flow extracted from `entities` + `edges` | no |
 
-LLM calls are batched and cached by input hash; reused across sessions.
+### Grounding policy (load-bearing spec commitment)
 
-## Obsidian export (derived view)
+For every LLM-grounded helper, the spec commits to the following at the design layer:
 
-The brain remains the source of truth; Obsidian sees a markdown render of selected slices. Generated by a Python helper, refreshed on demand or via a cron.
+1. **Every output claim must cite ≥1 `source_id`.** The grounding contract is: an output sentence without an inline `[id:N]` citation is treated as model speculation and discarded by the wrapper. Helpers return structured output (JSON), not freeform prose, so this is enforceable in code, not via prompt-discipline alone.
+2. **Span-level provenance.** When a citation is attached, the helper resolves the citation to a specific character span in the cited source (`source_id`, `span_start`, `span_end`). The wrapper validates that the quoted excerpt actually appears in the source content; mismatches are rejected and the helper retries once.
+3. **Output schema is strict JSON.** A retry-and-validate loop runs up to 3 times before returning a structured error. Schema mismatches don't propagate to the caller as silent failure.
+4. **Caching key = `(helper_name, input_hash, llm_model_id, llm_model_ver, prompt_template_ver)`**. Cache hits are exact; cache misses trigger a new LLM call. Cached results are stored as `reasoning_cache` rows joined to the input sources.
+5. **Token budgets per helper** are declared in config (`brain_config.reasoning_budgets`) and enforced. Exceeding the budget returns a structured `{"error": "budget_exceeded", "tokens_used": X}` rather than truncating output silently.
+
+### Structured outputs (schemas committed in spec; prompt templates deferred to plan)
+
+```sql
+-- Extracted claims persist for later cross-source comparison.
+CREATE TABLE extracted_claims (
+  id           BIGSERIAL PRIMARY KEY,
+  source_id    BIGINT NOT NULL REFERENCES sources(id),
+  subject      TEXT NOT NULL,
+  predicate    TEXT NOT NULL,
+  object       TEXT NOT NULL,
+  qualifier    TEXT,                          -- "under condition X" / "in domain Y"
+  evidence_span_start INT NOT NULL,
+  evidence_span_end   INT NOT NULL,
+  confidence   REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+  extracted_by_model TEXT NOT NULL,
+  extracted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  t_valid_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  t_valid_to   TIMESTAMPTZ
+);
+CREATE INDEX extracted_claims_subject_idx ON extracted_claims USING GIN(to_tsvector('english', subject));
+
+-- LLM call cache. Keyed for cache safety across model swaps.
+CREATE TABLE reasoning_cache (
+  cache_key    BYTEA PRIMARY KEY,           -- sha256 of the canonicalized input
+  helper_name  TEXT NOT NULL,
+  input_hash   BYTEA NOT NULL,
+  llm_model_id TEXT NOT NULL,
+  llm_model_ver TEXT NOT NULL,
+  prompt_ver   TEXT NOT NULL,
+  output_json  JSONB NOT NULL,
+  tokens_used  INT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  hit_count    INT NOT NULL DEFAULT 1
+);
+```
+
+Prompt templates themselves (the actual Haiku prompt strings) live in `brain/reasoning/prompts/<helper>.txt` and are versioned (`prompt_ver` bumps invalidate the cache). The spec deliberately doesn't fix prompts in the design doc — they will evolve faster than the schema.
+
+## Obsidian markdown view (co-equal store, not just a derived view)
+
+**Important framing shift from the original spec:** the markdown files under `<vault>/Agent-Brain/` are not only a derived view for humans — they are also the **disaster-recovery substrate**. If Postgres corrupts, the markdown files are the fallback from which the entire DB can be re-ingested without data loss. This dual role drives two requirements:
+
+1. **Lossless export** — every captured `sources` row that's meant to be human-readable (decisions, gotchas, patterns, project indexes, daily logs, session summaries, failure memories) must render to a markdown file with frontmatter that includes `db_id: <source_id>` and all metadata sufficient to recreate the row on re-ingest.
+2. **Round-trip semantic equivalence** — re-ingesting an exported markdown file produces a `sources` row whose `content` matches the original (modulo regenerated frontmatter). Wikilinks resolve to the same target rows.
+
+Generated by a Python helper, refreshed on demand or via a cron.
 
 Export shape inside `<vault>/Agent-Brain/`:
 
@@ -553,51 +806,70 @@ Phase 4. Exports brain operations as MCP tools, lets Cursor / Gemini / others us
 
 ## Migration from v1.0
 
-The current markdown pack contains real content (the `projects/brain/` self-host, the decision about Agent-Brain namespacing). One-shot migration:
+The current markdown pack contains real content. One-shot migration:
 
 1. Read every `.md` file under `<vault>/Agent-Brain/` recursively.
-2. For each: parse frontmatter, classify by type → bucket mapping (`decision` → semantic+episodic; `gotcha` → failure; `pattern` → procedural; `session` → episodic; etc.).
-3. Insert as `sources` row, with `kind` matching the original markdown type and `content` = the file body (without frontmatter).
-4. Re-render markdown view from the DB (round-trip identity check).
-5. Keep markdown files in place (they're the rendered view; the watcher takes over from here).
+2. For each: parse frontmatter, classify by type → bucket mapping per §Memory taxonomy. A `decision` source gets both `semantic` and `episodic` bucket rows (matching the multi-bucket schema).
+3. Insert as `sources` row, with `kind` matching the original markdown type and `content` = the file body (without frontmatter). Compute `content_hash` for dedup.
+4. Resolve wikilinks: for each `[[target-slug]]` in the body, look up the target's `db_id` (from its frontmatter if migrated, else by slug match). Record a `sources` cross-reference (not a content rewrite — the wikilink stays in the text).
+5. **Round-trip semantic equivalence check** — re-render the markdown view from the DB. Compare content body byte-for-byte (frontmatter is regenerated with `db_id` added, so cannot be byte-identical and we don't try). If a content body differs, abort the migration for that file and log; the user can inspect and re-run.
+6. Keep the markdown files in place. They are now the disaster-recovery store; the watcher takes over for further edits.
 
-The migration script is idempotent and re-runnable.
+The migration script is idempotent and re-runnable. **Wikilink failure handling:** a wikilink whose target slug doesn't exist in the migration set is logged but doesn't abort migration — the link stays in the body as an orphan link, matching Obsidian's own behavior. `brain health` reports orphan-link count.
 
 ## Phasing
 
-The build ships in 4 phases, each producing working software.
+The build ships in 6 phases (Phase 3 split into 3a/3b/3c per review). Each phase produces working software.
 
 ### Phase 1 — Foundation (v2.0)
 
-- Postgres install + pgvector + pg_trgm extensions
-- Schema migrations (alembic)
+Schema scope: `sources`, `sources_fts`, `memory_classifications`, `projects`, `sessions`, `subtasks`, `events`, `failure_memories`, `retrieval_log`, `brain_config`. **Does not include** `embeddings_1024` or HNSW index — pgvector install can be a Phase 1 dependency (extension is created) but no embedding rows are written yet, no HNSW index is built.
+
+- Postgres install + `vector` + `pg_trgm` extensions (via setup skill, optional `docker-compose.yml` provided)
+- Schema migrations (alembic): all Phase-1 tables above + the `vector` extension declaration so Phase 2's migration is a single `CREATE TABLE` away
 - Python package skeleton (`brain/` Python module)
-- `brain.write` / `brain.read` low-level API
-- FTS retrieval (no vectors yet)
-- Migrate v1 markdown content into DB
-- Obsidian export (read-only, generates markdown from DB)
+- `brain.write` / `brain.read` low-level API (text-only path)
+- FTS retrieval (full §Retrieval pipeline minus embedding/RRF/rerank)
+- Migrate v1 markdown content into DB (per §Migration from v1.0)
+- Obsidian markdown view (lossless export, co-equal DR substrate)
 - `brain-setup` and `brain-recall` skills (replacing the bash equivalents)
 
-### Phase 2 — Hybrid retrieval + reasoning
+### Phase 2 — Hybrid retrieval + Fast-tier reasoning
 
-- pgvector embeddings via **BGE-M3** (local, Apache-2.0, dense leg first)
-- HNSW index over halfvec; `embedding(model_id, version)` from day one
+- Alembic migration adding `embeddings_1024` + HNSW index + `extracted_claims` + `reasoning_cache`
+- pgvector embeddings via **BGE-M3** (local, Apache-2.0, dense leg first; 1024d HALFVEC)
 - **Parent-document chunking** (128–256-tok children, 512–1024-tok parents)
 - **Contextual Retrieval** (per-chunk context summary prepended before embedding)
 - RRF fusion of FTS + dense candidates
 - **mxbai-rerank-large-v2** cross-encoder on top 30–50
-- Reasoning helpers (`summarize`, `compare`, `cite`, `propose_links`)
+- Per-bucket τ thresholds + abstain
+- Reasoning helpers Fast-tier: `summarize`, `compare`, `cite`, `propose_links` (with grounding policy + structured JSON outputs)
 - `brain-link`, `brain-decide`, `brain-status` skills
 
-### Phase 3 — Capture fidelity + compaction-survival + retrieval hardening
+### Phase 3a — Capture fidelity + compaction-survival (the cognition-preservation core)
 
 - Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart) — installable opt-in
-- `session_resume_bundles` generator (in PreCompact + Stop)
-- Failure-memory typing + the `brain-failure` capture flow
-- File-watcher (Obsidian-side edits → DB update)
-- **Retrieval hardening**: multi-query fusion, Self-Query filter extraction, CRAG verification gate, confidence-threshold abstain, late chunking for agent-memory notes
-- BGE-M3 sparse + ColBERT legs added (triple-leg RRF + multi-vector rerank via VectorChord)
+- `session_resume_bundles` generator with the full selection algorithm and token-budget enforcement
+- Failure-memory capture flow (`brain-failure` skill + auto-flag from `Stop` hook)
+- File-watcher (Obsidian-side edits → DB update with conflict detection)
+- Compliance subsystem (under-captured session detection + warnings)
 - `brain-session-log`, `brain-session-resume`, `brain-handoff` skills
+- Sanitization minimum (ANSI stripping + instruction-density flagging + origin-aware retrieval quoting)
+
+### Phase 3b — Retrieval hardening (Deep tier)
+
+- Multi-query fusion (3–5 LLM-generated query variants, RRF-fused)
+- Self-Query (LLM extracts structured filters from query text)
+- CRAG verification gate (conditional per §Retrieval hardening trigger conditions)
+- `brain-recall --deep` tier integration
+- Eval harness: hand-curated 50–100-question set + LongMemEval + MemoryAgentBench cross-comparison
+
+### Phase 3c — Multi-vector retrieval + agent-memory chunking
+
+- BGE-M3 sparse + ColBERT legs (triple-leg RRF + multi-vector rerank via VectorChord)
+- Late chunking for agent-memory notes (long-context model embeds whole note, then splits)
+- HyDE for keyword-poor queries (conditional)
+- Query decomposition for multi-hop queries
 
 ### Phase 4 — Power features + multi-platform
 
@@ -607,8 +879,10 @@ The build ships in 4 phases, each producing working software.
 - MCP server (exports brain tools to Cursor/Gemini/Codex)
 - Codex CLI hook adapter
 - Cross-tool handoff format (portable export)
+- Sanitization hardening (structural anomaly detection, optional reject mode, trust scores)
+- Hard-negative mining + fine-tuning (when query log has enough labeled examples)
 
-Each phase is one implementation plan, written after this spec is approved.
+Each phase is one implementation plan, written after this spec is approved. Phase 3a is the highest-priority cognition-preservation work; Phase 3b and 3c can land in either order.
 
 ## Test plan
 
@@ -624,10 +898,64 @@ Unit tests in pytest. Integration tests use a throwaway Postgres test database. 
 - **Migration from v1** — sample vault, run migrate, diff round-trip render against original.
 - **End-to-end** — agent runs a synthetic 50-event session; resume bundle generated; new session reads bundle; agent answers a question about the prior session correctly.
 
-Performance budgets:
-- Capture: <50ms p99 for a single event write.
-- Recall (hybrid + rerank): <500ms p99 for k=5, corpus <100k chunks.
-- Resume bundle generation: <2s p99.
+Performance budgets (per phase, per tier):
+
+| Phase | Operation | Budget |
+|---|---|---|
+| 1 | Capture (single event write) | <50ms p99 |
+| 1 | Recall (FTS only) | <100ms p99 for k=5, corpus <100k rows |
+| 2 | Recall Fast tier (FTS + dense + RRF + rerank) | <500ms p99 for k=5, corpus <100k chunks |
+| 3a | Resume bundle generation (Stop hook) | <2s p99 |
+| 3a | Capture via hook (PostToolUse) | <30ms p99 (synchronous on hot path) |
+| 3b | Recall Deep tier (+ multi-query + CRAG) | <3s p99 |
+| 3c | Recall with multi-vector rerank | <800ms p99 |
+
+Success criterion #7 ("skill loop unchanged in latency vs v1 bash-only") applies to Phase-2 Fast-tier recall — explicitly NOT to Deep tier with CRAG.
+
+## Operational concerns
+
+### Backup & disaster recovery
+
+- **Nightly `pg_dump` cron** writes a logical backup to `<vault>/Agent-Brain/_backups/brain-YYYY-MM-DD.sql.gz`. Retention: 30 days rolling. The setup skill installs the cron.
+- **Markdown view is the second-tier fallback** (per §Obsidian markdown view). If Postgres corrupts beyond repair, `brain reingest --from-markdown <vault>/Agent-Brain/` reconstructs the DB. Non-human-readable content (embeddings, FTS indexes, retrieval logs) is lost in this path and rebuilt; the irreplaceable text content survives.
+- **WAL archiving** is opt-in for users running long-lived projects (`brain config set wal_archiving on` enables Postgres archive_mode + an `archive_command` to a directory). Default off — adds setup complexity.
+
+### Mid-write corruption
+
+All multi-table writes (a capture that touches `sources`, `sources_fts`, `events`, `memory_classifications`) execute inside a single transaction. `ON DELETE CASCADE` chains are deliberate — partial deletes are prevented by atomicity, not just constraints. The `brain.write` API never auto-commits between table writes.
+
+### Conflict resolution (Obsidian edit ↔ agent write)
+
+A markdown file edited in Obsidian is detected by the file-watcher. Conflict policy:
+
+1. Watcher reads the file, computes `content_hash`, compares against the current valid `sources` row pointing at that file (`uri` match).
+2. If the DB hash matches the previous file content → straightforward edit; create a new `sources` row with the new content, invalidate the old.
+3. If the DB hash matches the new file content → already in sync (concurrent agent write that happened first), no-op.
+4. **If both content versions differ from each other AND from the DB** → genuine conflict. The watcher writes both as `sources` rows, marks the newer one valid, the older one invalidated with `invalidation_reason='conflict: see <other_id>'`. The user sees both in `brain health` and resolves manually. The agent sees a flag in retrieval results.
+
+### Large-table migrations
+
+For schema changes on `sources` or `events` when the corpus exceeds ~100k rows, alembic migrations use the **expand-contract** pattern explicitly: add new column nullable, backfill in batches outside the transaction, then add the constraint. The migration playbook is documented in `docs/migrations/playbook.md` (written in Phase 1). No long-running locks against the working DB.
+
+### LLM API key management
+
+Required for: Contextual Retrieval (Haiku at ingest), CRAG verification (Haiku at retrieve, Deep tier only), reasoning helpers (Haiku/Sonnet by helper).
+
+- Default lookup order: `BRAIN_ANTHROPIC_API_KEY` env var → `ANTHROPIC_API_KEY` env var → `~/.config/brain/keys.yaml` (mode 0600, not in vault).
+- Setup skill prompts for keys interactively on first run; stores in `~/.config/brain/keys.yaml`. **Never** in `brain_config` (which gets backed up to vault) and **never** in a checked-in file.
+- **Graceful degradation when keys are absent:** Contextual Retrieval is skipped (chunks embedded without context prepend; quality warning logged). CRAG falls back to confidence-threshold-only (no LLM verification). Reasoning helpers return a structured error `{"error": "llm_unavailable"}` — not a silent fallback to a worse result.
+
+### Cost guards
+
+`brain_config.cost_caps` defines per-session ceilings (default values, tunable):
+
+| Operation | Default cap | Action when exceeded |
+|---|---|---|
+| Contextual Retrieval (ingest, Haiku) | $0.50 / session | Stop contextualizing further chunks; warn in `brain health`. Already-contextualized rows persist. |
+| CRAG verifications (Haiku) | 50 calls / session | Fall back to confidence-only retrieval for remainder. |
+| Reasoning helpers (Haiku/Sonnet) | $2.00 / session | Hard fail with `{"error": "cost_cap_exceeded", "spent": X, "cap": Y}`. |
+
+Costs are tracked in `cost_log(session_id, helper, llm_model, tokens_in, tokens_out, usd, occurred_at)`. `brain status` shows current session spend. Strict mode (opt-in) makes caps non-overridable; default mode lets the agent override with `--allow-cost-override` after surfacing the overage.
 
 ## Risks and mitigations
 
@@ -648,6 +976,28 @@ Performance budgets:
 5. The Obsidian view in `<vault>/Agent-Brain/` remains readable by a human, browseable in Obsidian, with clean links. The human's existing vault content outside `Agent-Brain/` is untouched (existing namespace rule preserved).
 6. Brain is portable: a Codex CLI session can call the brain via the MCP server (Phase 4) and capture/recall using the same vocabulary.
 7. p99 recall <500ms; p99 capture <50ms; end-to-end skill loop unchanged in latency vs v1 bash-only.
+
+## Appendix A — Adversarial walkthrough
+
+To verify the schema-feature gap is closed, here's a real scenario from this repo traced through the system. Each step lists what gets written, where, when, and what `brain-recall` finds later.
+
+**Scenario:** Agent is installing Postgres + pgvector on Arch Linux. First tries `docker compose` with the `pgvector/pgvector:pg16` image. Hits a permissions issue with the host-mounted data volume. Abandons docker, switches to native install via `pacman -S postgresql && pacman -S postgresql-pgvector`. Native install succeeds.
+
+| Step | Action | Rows written | Notes |
+|---|---|---|---|
+| 1 | Agent starts task: "install postgres + pgvector" | `subtasks(goal='install postgres + pgvector')`, `events(kind='plan', source_id=...)` | Plan is a `sources` row of `kind='note'`, classified as `episodic`. |
+| 2 | Runs `docker compose up -d` (hook fires) | `events(kind='tool_call', tool='Bash', input_id=A, output_id=B, status='error', duration_ms=2400)`. A = the command string, B = the output containing "permission denied on /var/lib/pgsql". Both as `sources(kind='command')` / `sources(kind='tool_call_output')`, classified `episodic`. | Output captured via head+tail+error-span; the "permission denied" line is preserved because it matches the error pattern. |
+| 3 | Agent reflects: "docker is fighting me here, switching to native" | `events(kind='reflection', source_id=C)`. C is the reflection note. Classified `episodic`. | |
+| 4 | Agent captures the failed approach (Path 1, mandatory) | `failure_memories(target_problem='install postgres + pgvector on Arch', attempted_approach='docker compose with pgvector/pgvector:pg16 image', outcome_evidence='[id:B] permission denied on /var/lib/pgsql', root_cause='host-volume uid mismatch', lesson='for Postgres on Arch prefer native install over docker', retry_count=1)`. Linked `sources` row holds the narrative; classifications `failure` + `episodic`. | This is the row that makes step 9 work. |
+| 5 | Agent runs `pacman -S postgresql postgresql-pgvector`, succeeds | `events(kind='tool_call', tool='Bash', status='ok', ...)`. | |
+| 6 | Agent captures the decision: "native install over docker for Postgres on Arch" | `events(kind='decision', source_id=D)`. D classified `episodic` (in this session) + `semantic` (the rule itself is durable). | Multi-bucket classification via the new schema. |
+| 7 | Subtask ends successfully | `subtasks.ended_at = NOW(), outcome='success', subtask_summary` written to `sources` | |
+| 8 | Session ends (`Stop` hook fires) | `session_resume_bundles` row written. Manifest includes: active_subtask=null (just resolved), recent_decisions=[D], recent_failures=[failure_memories row], recent_commands_succeeded=[pacman command], recent_commands_failed=[docker command with output tail]. Rendered as ≤500-token markdown. | |
+| 9 | **Two weeks later**, new session starts on this repo. Agent considers using docker for Postgres on another project. | `SessionStart` hook reads latest active bundle for this project. Bundle text doesn't immediately mention docker. Agent proceeds. Then agent runs `brain-recall "docker postgres install"` before pulling the trigger. | |
+| 10 | The recall pipeline | Metadata filter: project=brain, t_valid_to IS NULL, bucket IN ('failure', 'semantic'). FTS hits the docker-related failure row + decision row. Dense kNN hits same. RRF fuses, reranker promotes the failure row. Top result: the failure_memories row from step 4. | |
+| 11 | Agent sees: "you tried docker compose with pgvector/pgvector:pg16 → permission denied on /var/lib/pgsql; root cause: host-volume uid mismatch; lesson: prefer native install on Arch. retry_count=1, last_attempted=2026-05-09." | Doesn't re-attempt the failed approach. Captures a new failure_memories row if the new project actually has a different attempted_approach. | Success criterion #4 met: agent prevented from repeating the same dead end. |
+
+**Schema-feature gaps surfaced during the walkthrough:** none in the current design. (Before the review fixes: step 4 had no `failure_memories` table to write to; step 6's multi-bucket was forbidden by the old PK; step 10 didn't know which embedding model to query against. All three are resolved in the current spec.)
 
 ## Open questions resolved by research
 

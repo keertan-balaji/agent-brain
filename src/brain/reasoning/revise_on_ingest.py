@@ -1,12 +1,11 @@
-"""reasoning.revise_on_ingest: A-MEM neighbor-rewrite plan.
+"""reasoning.revise_on_ingest: A-MEM neighbor-rewrite plan, agent-driven.
 
-When a new source is ingested, propose how the surrounding knowledge graph
-should change: which existing claims to invalidate, which to reassert, which
-new claims to create, and direct contradictions to flag.
+prepare runs propose_links to gather neighbors, loads their extracted_claims,
+renders the prompt + schema for the agent. finalize validates the agent's
+JSON output against RevisionPlan.
 
-This helper PROPOSES only — it never mutates `sources.content`, nor writes
-to `extracted_claims`/`edges`. Execution is human-gated via brain-promote-
-answer (Task 23) or future explicit apply step.
+This helper PROPOSES only — it never mutates sources.content, extracted_claims,
+or edges. Execution is human-gated (future apply step).
 """
 
 from __future__ import annotations
@@ -19,22 +18,13 @@ from sqlalchemy import Engine, text
 
 from brain.db import session_scope
 from brain.embed.bge_m3 import BgeM3Embedder
-from brain.llm.client import (
-    HAIKU_MODEL_ID,
-    HAIKU_MODEL_VER,
-    AnthropicClient,
-)
-from brain.reasoning.base import GroundedHelper
+from brain.reasoning.base import GroundedHelper, PromptBundle
 from brain.reasoning.propose_links import propose_links
 
-_PROMPT_PATH = Path(__file__).parent.parent / "llm" / "prompts" / "revise_on_ingest.txt"
+_PROMPT_PATH = Path(__file__).parent / "prompts" / "revise_on_ingest.txt"
 _PROMPT_TEMPLATE = _PROMPT_PATH.read_text()
-_PROMPT_VER = "v1"
+_PROMPT_VER = "v2"
 _HELPER_NAME = "revise_on_ingest"
-_SYSTEM = (
-    "You revise an evolving knowledge graph by proposing claim updates and "
-    "flagging contradictions. You return strict JSON. No prose outside JSON."
-)
 
 
 class ClaimUpdate(BaseModel):
@@ -91,39 +81,34 @@ def _load_source_content(engine: Engine, source_id: int) -> str:
         return s.execute(text("SELECT content FROM sources WHERE id = :id"), {"id": source_id}).scalar()
 
 
-def revise_on_ingest(
+def _helper(engine: Engine) -> GroundedHelper[RevisionPlan]:
+    return GroundedHelper[RevisionPlan](
+        engine=engine,
+        name=_HELPER_NAME,
+        prompt_ver=_PROMPT_VER,
+        output_schema=RevisionPlan,
+    )
+
+
+def revise_prepare(
     engine: Engine,
     *,
     new_source_id: int,
     embedder: BgeM3Embedder,
-    llm_client: AnthropicClient,
-) -> RevisionPlan:
+) -> PromptBundle[RevisionPlan]:
     proposals = propose_links(engine, source_id=new_source_id, embedder=embedder, top_k=10)
     neighbor_ids = [p.target_source_id for p in proposals.proposals]
     neighbor_claims = _load_claims_for_sources(engine, neighbor_ids)
     new_content = _load_source_content(engine, new_source_id)
-
     rendered = _PROMPT_TEMPLATE.format(
         new_source_id=new_source_id,
         new_content=new_content,
         neighbor_claims=_render_claims(neighbor_claims),
     )
+    return _helper(engine).prepare(rendered)
 
-    def _llm_fn(prompt: str) -> str:
-        result = llm_client.haiku(
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-        )
-        return result.text
 
-    helper = GroundedHelper[RevisionPlan](
-        engine=engine,
-        name=_HELPER_NAME,
-        prompt_ver=_PROMPT_VER,
-        output_schema=RevisionPlan,
-        llm_fn=_llm_fn,
-        llm_model_id=HAIKU_MODEL_ID,
-        llm_model_ver=HAIKU_MODEL_VER,
-    )
-    return helper.run(rendered)
+def revise_finalize(
+    engine: Engine, *, cache_key: bytes, raw_output: str
+) -> RevisionPlan:
+    return _helper(engine).finalize(cache_key=cache_key, raw_output=raw_output)

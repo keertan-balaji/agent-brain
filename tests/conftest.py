@@ -6,20 +6,6 @@ import subprocess
 import pytest
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--api",
-        action="store_true",
-        default=False,
-        help="Run tests that hit real Anthropic API (requires BRAIN_ANTHROPIC_API_KEY env var).",
-    )
-
-
-@pytest.fixture
-def use_real_api(request) -> bool:
-    return request.config.getoption("--api")
-
-
 @pytest.fixture(scope="session")
 def pg_url() -> str:
     url = os.environ.get(

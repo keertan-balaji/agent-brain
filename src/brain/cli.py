@@ -92,6 +92,266 @@ def recall(
     console.print(table)
 
 
+@main.group()
+@click.pass_context
+def summarize(ctx: click.Context) -> None:
+    """Prepare/finalize the summarize reasoning helper."""
+
+
+@summarize.command("prepare")
+@click.option("--source-ids", required=True, help="Comma-separated source ids")
+@click.pass_context
+def summarize_prepare_cmd(ctx: click.Context, source_ids: str) -> None:
+    from brain.reasoning.summarize import summarize_prepare as _prep
+
+    ids = [int(x) for x in source_ids.split(",") if x.strip()]
+    bundle = _prep(ctx.obj["engine"], source_ids=ids)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@summarize.command("finalize")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def summarize_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.summarize import summarize_finalize as _fin
+
+    out = _fin(ctx.obj["engine"], cache_key=bytes.fromhex(cache_key), raw_output=output)
+    click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
+
+
+@main.group()
+@click.pass_context
+def compare(ctx: click.Context) -> None:
+    """Prepare/finalize the compare reasoning helper."""
+
+
+@compare.command("prepare")
+@click.option("--a-id", "a_source_id", required=True, type=int, help="Source A id")
+@click.option("--b-id", "b_source_id", required=True, type=int, help="Source B id")
+@click.pass_context
+def compare_prepare_cmd(ctx: click.Context, a_source_id: int, b_source_id: int) -> None:
+    from brain.reasoning.compare import compare_prepare as _prep
+
+    bundle = _prep(ctx.obj["engine"], a_source_id=a_source_id, b_source_id=b_source_id)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@compare.command("finalize")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def compare_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.compare import compare_finalize as _fin
+
+    out = _fin(ctx.obj["engine"], cache_key=bytes.fromhex(cache_key), raw_output=output)
+    click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
+
+
+@main.group()
+@click.pass_context
+def cite(ctx: click.Context) -> None:
+    """Prepare/finalize the cite reasoning helper."""
+
+
+@cite.command("prepare")
+@click.option("--claim", "claim_text", required=True, help="Claim to find supporting spans for")
+@click.option("--source-ids", required=True, help="Comma-separated candidate source ids")
+@click.pass_context
+def cite_prepare_cmd(ctx: click.Context, claim_text: str, source_ids: str) -> None:
+    from brain.reasoning.cite import cite_prepare as _prep
+
+    ids = [int(x) for x in source_ids.split(",") if x.strip()]
+    bundle = _prep(ctx.obj["engine"], claim_text=claim_text, candidate_source_ids=ids)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@cite.command("finalize")
+@click.option("--source-ids", required=True, help="Comma-separated candidate source ids (for re-validation)")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def cite_finalize_cmd(ctx: click.Context, source_ids: str, cache_key: str, output: str) -> None:
+    from brain.reasoning.cite import cite_finalize as _fin
+
+    ids = [int(x) for x in source_ids.split(",") if x.strip()]
+    out = _fin(
+        ctx.obj["engine"],
+        candidate_source_ids=ids,
+        cache_key=bytes.fromhex(cache_key),
+        raw_output=output,
+    )
+    click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
+
+
+@main.group()
+@click.pass_context
+def revise(ctx: click.Context) -> None:
+    """Prepare/finalize the revise_on_ingest reasoning helper (A-MEM plan)."""
+
+
+@revise.command("prepare")
+@click.option("--source-id", "new_source_id", required=True, type=int, help="New source id to revise around")
+@click.pass_context
+def revise_prepare_cmd(ctx: click.Context, new_source_id: int) -> None:
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.reasoning.revise_on_ingest import revise_prepare as _prep
+
+    embedder = BgeM3Embedder()
+    bundle = _prep(ctx.obj["engine"], new_source_id=new_source_id, embedder=embedder)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@revise.command("finalize")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def revise_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.revise_on_ingest import revise_finalize as _fin
+
+    plan = _fin(ctx.obj["engine"], cache_key=bytes.fromhex(cache_key), raw_output=output)
+    click.echo(json.dumps(plan.model_dump(mode="json"), indent=2))
+
+
+@main.group()
+@click.pass_context
+def ingest(ctx: click.Context) -> None:
+    """Chunk + embed a source (plain), or run agent-driven Contextual Retrieval."""
+
+
+@ingest.command("source")
+@click.argument("source_id", type=int)
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.pass_context
+def ingest_source_cmd(
+    ctx: click.Context,
+    source_id: int,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+) -> None:
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.ingest import ingest_source as _ingest
+
+    embedder = BgeM3Embedder()
+    summary = _ingest(
+        ctx.obj["engine"],
+        source_id=source_id,
+        embedder=embedder,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "parent_source_id": summary.parent_source_id,
+                "chunks_created": summary.chunks_created,
+                "context_summaries_inserted": summary.context_summaries_inserted,
+                "embeddings_inserted": summary.embeddings_inserted,
+            },
+            indent=2,
+        )
+    )
+
+
+@ingest.command("prepare-contexts")
+@click.argument("source_id", type=int)
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.pass_context
+def ingest_prepare_contexts_cmd(
+    ctx: click.Context,
+    source_id: int,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+) -> None:
+    from brain.ingest import ingest_prepare_contexts as _prep
+
+    prep = _prep(
+        ctx.obj["engine"],
+        source_id=source_id,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "source_id": prep.source_id,
+                "doc_body": prep.doc_body,
+                "chunks": [
+                    {"chunk_idx": c.chunk_idx, "child_text": c.child_text, "prompt": c.prompt}
+                    for c in prep.chunks
+                ],
+            },
+            indent=2,
+        )
+    )
+
+
+@ingest.command("finalize-contexts")
+@click.argument("source_id", type=int)
+@click.option("--contexts-json", required=True, help="JSON array of {chunk_idx, context}")
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.pass_context
+def ingest_finalize_contexts_cmd(
+    ctx: click.Context,
+    source_id: int,
+    contexts_json: str,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+) -> None:
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.ingest import ChunkContext, ingest_finalize_contexts as _fin
+
+    raw = json.loads(contexts_json)
+    contexts = [ChunkContext(chunk_idx=int(c["chunk_idx"]), context=str(c["context"])) for c in raw]
+    embedder = BgeM3Embedder()
+    summary = _fin(
+        ctx.obj["engine"],
+        source_id=source_id,
+        embedder=embedder,
+        contexts=contexts,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "parent_source_id": summary.parent_source_id,
+                "chunks_created": summary.chunks_created,
+                "context_summaries_inserted": summary.context_summaries_inserted,
+                "embeddings_inserted": summary.embeddings_inserted,
+            },
+            indent=2,
+        )
+    )
+
+
 @main.command()
 @click.option("--threshold", default=3, type=int)
 @click.pass_context

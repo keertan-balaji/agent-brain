@@ -162,15 +162,16 @@ Embeddings, RRF, reranker, hooks, MCP — all later phases. See `docs/superpower
 
 ## Agent Brain v2 — Phase 2
 
-Phase 2 ships hybrid retrieval, parent-document chunking, Contextual Retrieval, provenance-aware ranking, 5 Fast-tier reasoning helpers, 4 new skills, and a tau-rolling-ratio health report.
+> **Superseded by Phase 2.5 (below).** The embedded-Haiku flow described in this section was deleted: `BRAIN_ANTHROPIC_API_KEY` is no longer read, and `anthropic` is no longer a dependency. The retrieval pipeline (BGE-M3 + RRF + mxbai rerank + provenance defenses) is unchanged. Follow the Phase 2.5 quick-start below.
 
-Quick start (assumes Phase 1 already set up):
+Phase 2 originally shipped hybrid retrieval, parent-document chunking, Contextual Retrieval (Haiku), provenance-aware ranking, 5 Fast-tier reasoning helpers, 4 new skills, and a tau-rolling-ratio health report.
+
+Historical quick-start (DO NOT use on a fresh install — Phase 2.5 is current):
 
 ```bash
+# Historical only — anthropic dep removed in Phase 2.5
 export BRAIN_ANTHROPIC_API_KEY=sk-ant-...
-# Re-install deps to pull fastembed, sentence-transformers, anthropic, etc.
 uv pip install -e ".[dev]"
-# Models download on first use (~3GB total: BGE-M3 + mxbai-rerank)
 brain --help
 ```
 
@@ -186,6 +187,28 @@ New skills:
 Operations + setup: `docs/phase2.md`. Spec: `docs/superpowers/specs/2026-05-23-agent-brain-v2-design.md`.
 
 Phase 3 (hooks, compaction survival, multi-query fusion, sparse/ColBERT legs) — see spec.
+
+## Agent Brain v2 — Phase 2.5
+
+Phase 2.5 pivots reasoning helpers + Contextual Retrieval to agent-driven. **No Anthropic API key required.** Same hybrid retrieval + reranker stack as Phase 2.
+
+```bash
+# Existing Phase 2 install — just re-install to pick up dropped deps
+source .venv/bin/activate && uv pip install -e ".[dev]" && alembic upgrade head
+brain --help
+```
+
+5 new agent-facing skills:
+
+| Skill | When to use |
+|---|---|
+| `brain-summarize` | After recalling 2+ sources; produces cited structured synthesis |
+| `brain-compare` | Pairwise comparison of two sources (typed disagreement axis) |
+| `brain-cite` | Ground a claim in verbatim source spans (hallucination defense) |
+| `brain-revise` | A-MEM neighbor-rewrite plan after ingesting a contradicting source |
+| `brain-ingest-contextual` | 3-step contextual retrieval for long docs (>2k tokens) |
+
+Operations: `docs/phase2_5.md`. Plan: `docs/superpowers/plans/2026-05-24-agent-brain-v2-phase-2-5.md`.
 
 ## Design docs
 

@@ -1,48 +1,48 @@
-"""reasoning.cite: span-grounded claim support with verbatim entailment check."""
+"""cite_prepare / cite_finalize: prompt rendering + cache + excerpt validation."""
 
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock
 
 from brain.db import get_engine
-from brain.llm.client import HAIKU_MODEL_ID, HAIKU_MODEL_VER, LlmResult
-from brain.reasoning.cite import CiteOutput, Support, cite
+from brain.reasoning.cite import CiteOutput, Support, cite_finalize, cite_prepare
 from brain.schemas import SourceInput
 from brain.write import write
 
 
-def _mock_client(text: str) -> MagicMock:
-    client = MagicMock()
-    client.haiku.return_value = LlmResult(
-        text=text,
-        tokens_in=200,
-        tokens_out=80,
-        usd=0.0001,
-        model_id=HAIKU_MODEL_ID,
-        model_ver=HAIKU_MODEL_VER,
+def test_prepare_emits_prompt_with_claim_and_sources(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    body = "Postgres supports MVCC concurrency control."
+    sid = write(engine, SourceInput(kind="note", content=body)).source_id
+    bundle = cite_prepare(
+        engine, claim_text="postgres uses MVCC", candidate_source_ids=[sid]
     )
-    return client
+    assert bundle.cached is None
+    assert "postgres uses MVCC" in bundle.prompt
+    assert f"id={sid}" in bundle.prompt
+    assert "supporting_sources" in bundle.schema_json["properties"]
 
 
-def test_cite_returns_validated_support(pg_url: str) -> None:
+def test_finalize_returns_validated_support_when_excerpt_matches(pg_url: str) -> None:
     engine = get_engine(pg_url)
     body = "Postgres supports MVCC concurrency control out of the box."
     sid = write(engine, SourceInput(kind="note", content=body)).source_id
     excerpt = "Postgres supports MVCC concurrency control"
-    fixture = json.dumps(
+    bundle = cite_prepare(
+        engine, claim_text="postgres uses MVCC", candidate_source_ids=[sid]
+    )
+    raw = json.dumps(
         {
             "supporting_sources": [
-                {"source_id": sid, "span_start": 0, "span_end": len(excerpt), "excerpt": excerpt},
+                {"source_id": sid, "span_start": 0, "span_end": len(excerpt), "excerpt": excerpt}
             ]
         }
     )
-    client = _mock_client(fixture)
-    out = cite(
+    out = cite_finalize(
         engine,
-        claim_text="postgres uses MVCC",
         candidate_source_ids=[sid],
-        llm_client=client,
+        cache_key=bundle.cache_key,
+        raw_output=raw,
     )
     assert isinstance(out, CiteOutput)
     assert len(out.supporting_sources) == 1
@@ -50,36 +50,52 @@ def test_cite_returns_validated_support(pg_url: str) -> None:
     assert out.supporting_sources[0].source_id == sid
 
 
-def test_cite_rejects_excerpt_not_in_source(pg_url: str) -> None:
+def test_finalize_strips_hallucinated_excerpt(pg_url: str) -> None:
     engine = get_engine(pg_url)
     body = "Postgres supports MVCC."
     sid = write(engine, SourceInput(kind="note", content=body)).source_id
-    fixture = json.dumps(
+    bundle = cite_prepare(
+        engine, claim_text="postgres uses MVCC", candidate_source_ids=[sid]
+    )
+    raw = json.dumps(
         {
             "supporting_sources": [
-                {"source_id": sid, "span_start": 0, "span_end": 5, "excerpt": "FABRICATED TEXT"},
+                {"source_id": sid, "span_start": 0, "span_end": 5, "excerpt": "FABRICATED TEXT"}
             ]
         }
     )
-    client = _mock_client(fixture)
-    out = cite(
+    out = cite_finalize(
         engine,
-        claim_text="postgres uses MVCC",
         candidate_source_ids=[sid],
-        llm_client=client,
+        cache_key=bundle.cache_key,
+        raw_output=raw,
     )
     assert out.supporting_sources == []
 
 
-def test_cite_returns_empty_when_no_support(pg_url: str) -> None:
+def test_prepare_second_call_returns_cached(pg_url: str) -> None:
     engine = get_engine(pg_url)
-    sid = write(engine, SourceInput(kind="note", content="totally unrelated content")).source_id
-    fixture = json.dumps({"supporting_sources": []})
-    client = _mock_client(fixture)
-    out = cite(
-        engine,
-        claim_text="postgres uses MVCC",
-        candidate_source_ids=[sid],
-        llm_client=client,
+    body = "Postgres supports MVCC."
+    sid = write(engine, SourceInput(kind="note", content=body)).source_id
+    excerpt = "Postgres supports MVCC"
+    bundle1 = cite_prepare(
+        engine, claim_text="postgres uses MVCC", candidate_source_ids=[sid]
     )
-    assert out.supporting_sources == []
+    raw = json.dumps(
+        {
+            "supporting_sources": [
+                {"source_id": sid, "span_start": 0, "span_end": len(excerpt), "excerpt": excerpt}
+            ]
+        }
+    )
+    cite_finalize(
+        engine,
+        candidate_source_ids=[sid],
+        cache_key=bundle1.cache_key,
+        raw_output=raw,
+    )
+    bundle2 = cite_prepare(
+        engine, claim_text="postgres uses MVCC", candidate_source_ids=[sid]
+    )
+    assert bundle2.cached is not None
+    assert bundle2.cached.supporting_sources[0].source_id == sid

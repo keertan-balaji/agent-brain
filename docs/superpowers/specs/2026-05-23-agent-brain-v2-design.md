@@ -1001,7 +1001,7 @@ plan_research("vector quantization tradeoffs in 2026 pgvector")
 1. **Every output claim cites ≥1 `source_id` with a character span.** An output sentence without an inline `[id:N]` citation is treated as model speculation and discarded by the wrapper. Helpers return structured JSON, not freeform prose — this is enforceable in code, not via prompt-discipline alone.
 2. **Span-level provenance.** When a citation is attached, the helper resolves it to a specific character span (`source_id`, `span_start`, `span_end`). The wrapper validates the quoted excerpt actually appears in the source content; mismatches are rejected and the helper retries once.
 3. **Output schema is strict JSON.** A retry-and-validate loop runs up to 3 times before returning `{"error": "schema_violation"}`. Schema mismatches don't propagate to the caller as silent failure.
-4. **Cache key = `(helper_name, canonicalized_input_hash, llm_model_id, llm_model_ver, prompt_template_ver)`.** Stored as `reasoning_cache` rows joined to the input sources. Cache hits are exact; prompt-version bump invalidates the cache.
+4. **Cache key = `(helper_name, canonicalized_input_hash, prompt_template_ver)`.** Stored as `reasoning_cache` rows joined to the input sources. Cache hits are exact; prompt-version bump invalidates the cache. *(Phase 2.5 dropped `llm_model_id`/`llm_model_ver` from the hash — the calling agent IS the model, so per-model partitioning no longer applies. Cache becomes cross-agent shareable.)*
 5. **Token budget per helper** declared in `brain_config.reasoning_budgets` and enforced. Exceeding the budget returns `{"error": "budget_exceeded", "tokens_used": X}` rather than truncating output silently.
 6. **Cost-capped per session** per §Operational concerns. Hard fail or override-prompt, never silent overspend.
 
@@ -1028,17 +1028,15 @@ CREATE INDEX extracted_claims_subject_idx ON extracted_claims USING GIN(to_tsvec
 
 -- LLM call cache. Keyed for cache safety across model swaps.
 CREATE TABLE reasoning_cache (
-  cache_key    BYTEA PRIMARY KEY,           -- sha256 of the canonicalized input
+  cache_key    BYTEA PRIMARY KEY,           -- sha256(helper_name + input_hash + prompt_ver)
   helper_name  TEXT NOT NULL,
   input_hash   BYTEA NOT NULL,
-  llm_model_id TEXT NOT NULL,
-  llm_model_ver TEXT NOT NULL,
   prompt_ver   TEXT NOT NULL,
   output_json  JSONB NOT NULL,
-  tokens_used  INT NOT NULL,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   hit_count    INT NOT NULL DEFAULT 1
 );
+-- Phase 2.5 dropped llm_model_id, llm_model_ver, tokens_used (no embedded LLM call to track).
 ```
 
 Prompt templates themselves (the actual Haiku prompt strings) live in `brain/reasoning/prompts/<helper>.txt` and are versioned (`prompt_ver` bumps invalidate the cache). The spec deliberately doesn't fix prompts in the design doc — they will evolve faster than the schema.
@@ -1164,6 +1162,8 @@ Schema scope: `sources` (with `project_id`, `status`, `provenance_kind`, `genera
 - **`brain-promote-answer`** skill — promotes a high-confidence `reasoning_cache` entry into a permanent `sources` row with `provenance_kind='synthesized'` and `synthesized_from = [input_source_ids]`. Human-gated. Closes the "good answers shouldn't disappear into chat history" gap. Safe because the down-weight ships in the same phase.
 - **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. The schema tables (`entities`, `edges`) ship in Phase 1; the LLM-driven `extract_claims` + `extract_entities` helpers ship in Phase 2 — this skill arrives in Phase 2 as the named composition + ships a default Obsidian render template.
 
+**Post-ship pivot (Phase 2.5):** all five reasoning helpers and Contextual Retrieval were refactored to be agent-driven. The brain prepares the prompt + JSON schema + cache key; the calling agent synthesizes inline; the brain validates and persists. `AnthropicClient`, `BudgetExceeded`, `cost_log`, and the `anthropic` / `pyyaml` dependencies were removed. The schema (embeddings_1024, extracted_claims, reasoning_cache) and the retrieval pipeline (FTS + dense + RRF + cross-encoder + provenance defenses + tau abstain) are unchanged. See `docs/phase2_5.md` and `docs/superpowers/plans/2026-05-24-agent-brain-v2-phase-2-5.md`.
+
 ### Phase 3a — Capture fidelity + compaction-survival (the cognition-preservation core)
 
 - Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart, SessionEnd) — installable opt-in. Note: `SessionStart` delivers the bundle into agent context via `additionalContext`; `PreCompact` only *persists* the bundle (no documented stdout-injection channel).
@@ -1275,7 +1275,7 @@ Required for: Contextual Retrieval (Haiku at ingest), CRAG verification (Haiku a
 | CRAG verifications (Haiku) | 50 calls / session | Fall back to confidence-only retrieval for remainder. |
 | Reasoning helpers (Haiku/Sonnet) | $2.00 / session | Hard fail with `{"error": "cost_cap_exceeded", "spent": X, "cap": Y}`. |
 
-Costs are tracked in `cost_log(session_id, helper, llm_model, tokens_in, tokens_out, usd, occurred_at)`. `brain status` shows current session spend. Strict mode (opt-in) makes caps non-overridable; default mode lets the agent override with `--allow-cost-override` after surfacing the overage.
+*(Phase 2.5 removed cost_log and the cost-cap subsystem entirely; reasoning is now agent-driven, so all token cost is borne by the host agent's session — already budgeted by the host runtime. The cost-cap table above describes the legacy Phase 2 embedded-Haiku model retained for historical context only.)*
 
 ## Risks and mitigations
 

@@ -403,26 +403,9 @@ class ReasoningCache(Base):
     cache_key: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
     helper_name: Mapped[str] = mapped_column(Text, nullable=False)
     input_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    llm_model_id: Mapped[str] = mapped_column(Text, nullable=False)
-    llm_model_ver: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_ver: Mapped[str] = mapped_column(Text, nullable=False)
     output_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    tokens_used: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     hit_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
-
-
-class CostLog(Base):
-    __tablename__ = "cost_log"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    session_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("sessions.id"))
-    helper: Mapped[str] = mapped_column(Text, nullable=False)
-    llm_model: Mapped[str] = mapped_column(Text, nullable=False)
-    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False)
-    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False)
-    usd: Mapped[float] = mapped_column(Float, nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )

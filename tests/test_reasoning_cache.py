@@ -1,93 +1,86 @@
-"""reasoning_cache + GroundedHelper contract (cache, retry, validate)."""
+"""GroundedHelper: prepare / finalize / cache via sha256(name+input+prompt_ver)."""
 
 from __future__ import annotations
-
-from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
 from sqlalchemy import text
 
 from brain.db import get_engine, session_scope
-from brain.reasoning.base import GroundedHelper, cache_key_for
+from brain.reasoning.base import GroundedHelper, PromptBundle, cache_key_for
 
 
 class _Out(BaseModel):
     answer: str
 
 
-def test_cache_key_is_deterministic() -> None:
-    a = cache_key_for("summarize", b"\x00" * 32, "haiku", "v1", "p1")
-    b = cache_key_for("summarize", b"\x00" * 32, "haiku", "v1", "p1")
+def test_cache_key_is_deterministic_three_field() -> None:
+    a = cache_key_for("summarize", b"\x00" * 32, "v1")
+    b = cache_key_for("summarize", b"\x00" * 32, "v1")
     assert a == b
     assert len(a) == 32
 
 
 def test_cache_key_differs_on_input() -> None:
-    base = cache_key_for("summarize", b"\x00" * 32, "haiku", "v1", "p1")
-    assert cache_key_for("compare", b"\x00" * 32, "haiku", "v1", "p1") != base
-    assert cache_key_for("summarize", b"\x01" * 32, "haiku", "v1", "p1") != base
-    assert cache_key_for("summarize", b"\x00" * 32, "sonnet", "v1", "p1") != base
-    assert cache_key_for("summarize", b"\x00" * 32, "haiku", "v2", "p1") != base
-    assert cache_key_for("summarize", b"\x00" * 32, "haiku", "v1", "p2") != base
+    base = cache_key_for("summarize", b"\x00" * 32, "v1")
+    assert cache_key_for("compare", b"\x00" * 32, "v1") != base
+    assert cache_key_for("summarize", b"\x01" * 32, "v1") != base
+    assert cache_key_for("summarize", b"\x00" * 32, "v2") != base
 
 
-def test_grounded_helper_caches_second_call(pg_url: str) -> None:
+def test_prepare_returns_bundle_with_no_cache(pg_url: str) -> None:
     engine = get_engine(pg_url)
-    llm_fn = MagicMock(return_value='{"answer": "42"}')
-    helper = GroundedHelper(
-        engine=engine,
-        name="testhelper",
-        prompt_ver="v1",
-        output_schema=_Out,
-        llm_fn=llm_fn,
-        llm_model_id="haiku",
-        llm_model_ver="2025-10-01",
+    helper = GroundedHelper[_Out](
+        engine=engine, name="t1", prompt_ver="v1", output_schema=_Out
     )
-    first = helper.run("the prompt")
-    second = helper.run("the prompt")
-    assert first.answer == "42"
-    assert second.answer == "42"
-    assert llm_fn.call_count == 1  # second served from cache
+    bundle = helper.prepare("hello prompt")
+    assert isinstance(bundle, PromptBundle)
+    assert bundle.cached is None
+    assert bundle.prompt == "hello prompt"
+    assert "answer" in bundle.schema_json["properties"]
+    assert bundle.cache_key_hex == bundle.cache_key.hex()
 
-    # hit_count bumped
+
+def test_finalize_validates_and_persists(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    helper = GroundedHelper[_Out](
+        engine=engine, name="t2", prompt_ver="v1", output_schema=_Out
+    )
+    bundle = helper.prepare("prompt-a")
+    out = helper.finalize(cache_key=bundle.cache_key, raw_output='{"answer":"42"}')
+    assert out.answer == "42"
     with session_scope(engine) as s:
-        rows = s.execute(
-            text("SELECT hit_count FROM reasoning_cache WHERE helper_name = 'testhelper'")
-        ).fetchall()
-    assert len(rows) == 1
-    assert rows[0][0] >= 2
+        row = s.execute(
+            text("SELECT helper_name, hit_count FROM reasoning_cache WHERE cache_key = :k"),
+            {"k": bundle.cache_key},
+        ).one()
+    assert row[0] == "t2"
+    assert row[1] == 1
 
 
-def test_grounded_helper_retries_on_invalid_json(pg_url: str) -> None:
+def test_prepare_second_call_returns_cached(pg_url: str) -> None:
     engine = get_engine(pg_url)
-    llm_fn = MagicMock(side_effect=["not json", "still bad", '{"answer": "ok"}'])
-    helper = GroundedHelper(
-        engine=engine,
-        name="retry_helper",
-        prompt_ver="v1",
-        output_schema=_Out,
-        llm_fn=llm_fn,
-        llm_model_id="haiku",
-        llm_model_ver="2025-10-01",
+    helper = GroundedHelper[_Out](
+        engine=engine, name="t3", prompt_ver="v1", output_schema=_Out
     )
-    out = helper.run("try me")
-    assert out.answer == "ok"
-    assert llm_fn.call_count == 3
+    bundle1 = helper.prepare("prompt-b")
+    helper.finalize(cache_key=bundle1.cache_key, raw_output='{"answer":"cached-value"}')
+    bundle2 = helper.prepare("prompt-b")
+    assert bundle2.cached is not None
+    assert bundle2.cached.answer == "cached-value"
+    with session_scope(engine) as s:
+        n = s.execute(
+            text("SELECT hit_count FROM reasoning_cache WHERE cache_key = :k"),
+            {"k": bundle2.cache_key},
+        ).scalar()
+    assert n >= 2
 
 
-def test_grounded_helper_raises_after_max_retries(pg_url: str) -> None:
+def test_finalize_raises_on_invalid_json(pg_url: str) -> None:
     engine = get_engine(pg_url)
-    llm_fn = MagicMock(return_value="not json ever")
-    helper = GroundedHelper(
-        engine=engine,
-        name="fail_helper",
-        prompt_ver="v1",
-        output_schema=_Out,
-        llm_fn=llm_fn,
-        llm_model_id="haiku",
-        llm_model_ver="2025-10-01",
+    helper = GroundedHelper[_Out](
+        engine=engine, name="t4", prompt_ver="v1", output_schema=_Out
     )
-    with pytest.raises(RuntimeError):
-        helper.run("doomed")
-    assert llm_fn.call_count == 3  # MAX_RETRIES
+    bundle = helper.prepare("prompt-c")
+    with pytest.raises(Exception):
+        helper.finalize(cache_key=bundle.cache_key, raw_output="not json")

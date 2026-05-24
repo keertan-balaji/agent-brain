@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — Phase 2 ships hybrid retrieval + Fast-tier reasoning helpers + 4 new skills (v1 obsidian-* skills retained).",
-  "version": "0.3.0",
+  "description": "Persistent cognition store for AI coding agents — Phase 2.5 ships agent-driven reasoning helpers (no Anthropic API key required) and 5 new agent-facing skills (v1 obsidian-* skills retained).",
+  "version": "0.4.0",
   "author": {
     "name": "keertan",
     "email": "keertan@syntheticsciences.ai"
@@ -31,6 +31,11 @@
     "skills/obsidian-project-bootstrap",
     "skills/obsidian-map-repo",
     "skills/obsidian-recall",
-    "skills/obsidian-capture"
+    "skills/obsidian-capture",
+    "skills/brain-summarize",
+    "skills/brain-compare",
+    "skills/brain-cite",
+    "skills/brain-revise",
+    "skills/brain-ingest-contextual"
   ]
 }

@@ -47,7 +47,7 @@ def test_downgrade_base_drops_brain_config(pg_url: str) -> None:
 
 
 def test_phase2_tables_exist(pg_url: str) -> None:
-    """embeddings_1024, extracted_claims, reasoning_cache, cost_log."""
+    """embeddings_1024, extracted_claims, reasoning_cache (cost_log dropped in 009)."""
     engine = get_engine(pg_url)
     with engine.connect() as conn:
         existing = conn.execute(
@@ -57,7 +57,7 @@ def test_phase2_tables_exist(pg_url: str) -> None:
             )
         ).fetchall()
     table_names = {r[0] for r in existing}
-    for required in ("embeddings_1024", "extracted_claims", "reasoning_cache", "cost_log"):
+    for required in ("embeddings_1024", "extracted_claims", "reasoning_cache"):
         assert required in table_names, f"missing Phase 2 table: {required}"
 
 
@@ -72,3 +72,29 @@ def test_embeddings_hnsw_index_exists(pg_url: str) -> None:
         ).fetchall()
     idx = {r[0] for r in rows}
     assert "embeddings_1024_hnsw_idx" in idx
+
+
+def test_phase2_5_drops_cost_log(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+        ).fetchall()
+    names = {r[0] for r in rows}
+    assert "cost_log" not in names, "cost_log should be dropped in migration 009"
+
+
+def test_phase2_5_drops_reasoning_cache_llm_columns(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with engine.connect() as conn:
+        cols = conn.execute(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name='reasoning_cache'"
+            )
+        ).fetchall()
+    col_names = {r[0] for r in cols}
+    for dead in ("llm_model_id", "llm_model_ver", "tokens_used"):
+        assert dead not in col_names, f"{dead} should be dropped by migration 009"
+    for kept in ("cache_key", "helper_name", "input_hash", "prompt_ver", "output_json", "hit_count"):
+        assert kept in col_names

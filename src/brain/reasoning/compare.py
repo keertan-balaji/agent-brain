@@ -1,10 +1,4 @@
-"""reasoning.compare: pairwise comparison of two sources.
-
-Produces structured agreements / disagreements (with typed axis) / scope_diff /
-citations. Axis is documented as one of {scope, time, mechanism, evidence} in
-the prompt; the schema accepts any string for forward compatibility (the
-output is consumed by humans + downstream reasoning, not as enum).
-"""
+"""reasoning.compare: prepare a pairwise comparison prompt; finalize validates output."""
 
 from __future__ import annotations
 
@@ -14,22 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy import Engine, text
 
 from brain.db import session_scope
-from brain.llm.client import (
-    HAIKU_MODEL_ID,
-    HAIKU_MODEL_VER,
-    AnthropicClient,
-)
-from brain.reasoning.base import GroundedHelper
+from brain.reasoning.base import GroundedHelper, PromptBundle
 
-_PROMPT_PATH = Path(__file__).parent.parent / "llm" / "prompts" / "compare.txt"
+_PROMPT_PATH = Path(__file__).parent / "prompts" / "compare.txt"
 _PROMPT_TEMPLATE = _PROMPT_PATH.read_text()
-_PROMPT_VER = "v1"
+_PROMPT_VER = "v2"
 _HELPER_NAME = "compare"
-_SYSTEM = (
-    "You compare two source documents and emit strict JSON with `agreements`, "
-    "`disagreements`, `scope_diff`, and `citations` fields. No prose outside "
-    "the JSON."
-)
 
 
 class CompareOutput(BaseModel):
@@ -51,13 +35,18 @@ def _load_source(engine: Engine, source_id: int) -> str:
     return row[0]
 
 
-def compare(
-    engine: Engine,
-    *,
-    a_source_id: int,
-    b_source_id: int,
-    llm_client: AnthropicClient,
-) -> CompareOutput:
+def _helper(engine: Engine) -> GroundedHelper[CompareOutput]:
+    return GroundedHelper[CompareOutput](
+        engine=engine,
+        name=_HELPER_NAME,
+        prompt_ver=_PROMPT_VER,
+        output_schema=CompareOutput,
+    )
+
+
+def compare_prepare(
+    engine: Engine, *, a_source_id: int, b_source_id: int
+) -> PromptBundle[CompareOutput]:
     a_content = _load_source(engine, a_source_id)
     b_content = _load_source(engine, b_source_id)
     rendered = _PROMPT_TEMPLATE.format(
@@ -66,22 +55,10 @@ def compare(
         b_id=b_source_id,
         b_content=b_content,
     )
+    return _helper(engine).prepare(rendered)
 
-    def _llm_fn(prompt: str) -> str:
-        result = llm_client.haiku(
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-        )
-        return result.text
 
-    helper = GroundedHelper[CompareOutput](
-        engine=engine,
-        name=_HELPER_NAME,
-        prompt_ver=_PROMPT_VER,
-        output_schema=CompareOutput,
-        llm_fn=_llm_fn,
-        llm_model_id=HAIKU_MODEL_ID,
-        llm_model_ver=HAIKU_MODEL_VER,
-    )
-    return helper.run(rendered)
+def compare_finalize(
+    engine: Engine, *, cache_key: bytes, raw_output: str
+) -> CompareOutput:
+    return _helper(engine).finalize(cache_key=cache_key, raw_output=raw_output)

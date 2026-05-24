@@ -17,6 +17,8 @@ dependencies = [
     "fastembed>=0.7.0",
     "tiktoken>=0.8",
     "nltk>=3.9",
+    "anthropic>=0.40",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

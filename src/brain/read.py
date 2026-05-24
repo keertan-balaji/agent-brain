@@ -1,7 +1,10 @@
-"""brain.read() — Phase 1 FTS-only retrieval with metadata pre-filter.
+"""brain.recall() — hybrid retrieval (FTS + vector kNN, fused via RRF).
 
-No embeddings, RRF, or rerank in Phase 1. The interface stays stable; Phase 2 adds
-those stages behind the same recall() signature.
+Phase 1 (FTS-only) behavior is preserved: callers that don't pass embedder get
+identical results. When embedder is provided, runs both FTS and pgvector kNN,
+maps chunk hits to parent source ids, fuses by RRF, hydrates top-k.
+
+Cross-encoder rerank and per-bucket tau/abstain are added in Tasks 10 and 11.
 """
 
 from __future__ import annotations
@@ -11,6 +14,10 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, text
 
 from brain.db import session_scope
+from brain.embed.bge_m3 import BgeM3Embedder
+from brain.retrieval.fts import fts_search
+from brain.retrieval.rrf import rrf_fuse
+from brain.retrieval.vector import knn_search
 from brain.schemas import Bucket
 
 
@@ -23,6 +30,27 @@ class RecallHit:
     project_id: int | None
 
 
+def _hydrate(engine: Engine, ids_with_scores: list[tuple[int, float]]) -> list[RecallHit]:
+    if not ids_with_scores:
+        return []
+    ids = [i for i, _ in ids_with_scores]
+    score_map = dict(ids_with_scores)
+    with session_scope(engine) as s:
+        rows = s.execute(
+            text(
+                "SELECT id, kind, content, project_id FROM sources "
+                "WHERE id = ANY(:ids) AND t_valid_to IS NULL"
+            ),
+            {"ids": ids},
+        ).fetchall()
+    by_id = {r[0]: r for r in rows}
+    ordered = [by_id[i] for i in ids if i in by_id]
+    return [
+        RecallHit(id=r[0], kind=r[1], content=r[2], project_id=r[3], score=score_map[r[0]])
+        for r in ordered
+    ]
+
+
 def recall(
     engine: Engine,
     query: str,
@@ -32,62 +60,27 @@ def recall(
     buckets: list[Bucket] | None = None,
     kinds: list[str] | None = None,
     include_archived: bool = False,
+    embedder: BgeM3Embedder | None = None,
 ) -> list[RecallHit]:
-    """FTS retrieval with metadata pre-filter. Returns up to k ranked hits.
+    """Hybrid retrieval. embedder=None -> FTS-only (Phase 1 behavior)."""
+    over_k = max(100, k * 10)
+    fts_hits = fts_search(
+        engine,
+        query=query,
+        k=over_k,
+        project_id=project_id,
+        buckets=buckets,
+        kinds=kinds,
+        include_archived=include_archived,
+    )
+    fts_ids = [h.source_id for h in fts_hits]
 
-    Pre-filter contract matches spec §Retrieval step 1:
-        WHERE s.t_valid_to IS NULL
-          AND (include_archived OR s.status = 'active')
-          AND optional project_id (primary or via source_projects M2M)
-          AND optional buckets (via memory_classifications)
-          AND optional kinds
-    """
-    sql = """
-        SELECT
-            s.id, s.kind, s.content, s.project_id,
-            ts_rank_cd(f.tsv, plainto_tsquery('english', :q)) AS score
-        FROM sources s
-        JOIN sources_fts f ON f.source_id = s.id
-        WHERE s.t_valid_to IS NULL
-          AND (CAST(:include_archived AS boolean) OR s.status = 'active')
-          AND f.tsv @@ plainto_tsquery('english', :q)
-          AND (
-                CAST(:project_id AS bigint) IS NULL
-             OR s.project_id = CAST(:project_id AS bigint)
-             OR EXISTS (
-                    SELECT 1 FROM source_projects sp
-                    WHERE sp.source_id = s.id
-                      AND sp.project_id = CAST(:project_id AS bigint)
-                )
-          )
-          AND (
-                CAST(:buckets AS text[]) IS NULL
-             OR EXISTS (
-                    SELECT 1 FROM memory_classifications mc
-                    WHERE mc.source_id = s.id
-                      AND mc.bucket = ANY(CAST(:buckets AS text[]))
-                )
-          )
-          AND (
-                CAST(:kinds AS text[]) IS NULL
-             OR s.kind = ANY(CAST(:kinds AS text[]))
-          )
-        ORDER BY score DESC
-        LIMIT :k
-    """
-    with session_scope(engine) as s:
-        rows = s.execute(
-            text(sql),
-            {
-                "q": query,
-                "k": k,
-                "project_id": project_id,
-                "buckets": buckets,
-                "kinds": kinds,
-                "include_archived": include_archived,
-            },
-        ).fetchall()
-    return [
-        RecallHit(id=r[0], kind=r[1], content=r[2], project_id=r[3], score=float(r[4]))
-        for r in rows
-    ]
+    if embedder is None:
+        scored = [(h.source_id, h.score) for h in fts_hits[:k]]
+        return _hydrate(engine, scored)
+
+    vec_hits = knn_search(engine, query_text=query, embedder=embedder, k=over_k)
+    vec_ids = [h.parent_source_id for h in vec_hits]
+
+    fused = rrf_fuse([fts_ids, vec_ids])[:k]
+    return _hydrate(engine, fused)

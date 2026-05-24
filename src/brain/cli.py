@@ -92,6 +92,40 @@ def recall(
     console.print(table)
 
 
+@main.group()
+@click.pass_context
+def summarize(ctx: click.Context) -> None:
+    """Prepare/finalize the summarize reasoning helper."""
+
+
+@summarize.command("prepare")
+@click.option("--source-ids", required=True, help="Comma-separated source ids")
+@click.pass_context
+def summarize_prepare_cmd(ctx: click.Context, source_ids: str) -> None:
+    from brain.reasoning.summarize import summarize_prepare as _prep
+
+    ids = [int(x) for x in source_ids.split(",") if x.strip()]
+    bundle = _prep(ctx.obj["engine"], source_ids=ids)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@summarize.command("finalize")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def summarize_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.summarize import summarize_finalize as _fin
+
+    out = _fin(ctx.obj["engine"], cache_key=bytes.fromhex(cache_key), raw_output=output)
+    click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
+
+
 @main.command()
 @click.option("--threshold", default=3, type=int)
 @click.pass_context

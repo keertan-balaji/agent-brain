@@ -1,58 +1,52 @@
-"""reasoning.summarize: cited synthesis over a set of sources."""
+"""summarize_prepare / summarize_finalize: prompt rendering + cache + validation."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import json
 
 from brain.db import get_engine
-from brain.llm.client import HAIKU_MODEL_ID, HAIKU_MODEL_VER, LlmResult
-from brain.reasoning.summarize import SummarizeOutput, summarize
+from brain.reasoning.summarize import SummarizeOutput, summarize_finalize, summarize_prepare
 from brain.schemas import SourceInput
 from brain.write import write
 
 
-def _mock_client(text: str) -> MagicMock:
-    client = MagicMock()
-    client.haiku.return_value = LlmResult(
-        text=text,
-        tokens_in=200,
-        tokens_out=80,
-        usd=0.0001,
-        model_id=HAIKU_MODEL_ID,
-        model_ver=HAIKU_MODEL_VER,
-    )
-    return client
-
-
-def test_summarize_returns_parsed_output(pg_url: str) -> None:
-    engine = get_engine(pg_url)
-    ids = []
-    for body in ("postgres is open source", "postgres supports MVCC", "postgres has FTS"):
-        r = write(engine, SourceInput(kind="note", content=body))
-        ids.append(r.source_id)
-    fixture = (
-        '{"summary": "Postgres is an open-source MVCC database with full-text search.", '
-        f'"citations": {ids}}}'
-    )
-    client = _mock_client(fixture)
-    out = summarize(engine, source_ids=ids, llm_client=client)
-    assert isinstance(out, SummarizeOutput)
-    assert "postgres" in out.summary.lower()
-    assert set(out.citations) == set(ids)
-
-
-def test_summarize_caches_second_call(pg_url: str) -> None:
+def test_prepare_emits_prompt_with_source_markers(pg_url: str) -> None:
     engine = get_engine(pg_url)
     ids = []
     for body in ("alpha source", "beta source"):
         r = write(engine, SourceInput(kind="note", content=body))
         ids.append(r.source_id)
-    fixture = (
-        '{"summary": "Alpha and beta are placeholder sources.", '
-        f'"citations": {ids}}}'
-    )
-    client = _mock_client(fixture)
-    out1 = summarize(engine, source_ids=ids, llm_client=client)
-    out2 = summarize(engine, source_ids=ids, llm_client=client)
-    assert out1.summary == out2.summary
-    assert client.haiku.call_count == 1  # second served from cache
+    bundle = summarize_prepare(engine, source_ids=ids)
+    assert bundle.cached is None
+    for sid in ids:
+        assert f"[id={sid}]" in bundle.prompt
+    assert "summary" in bundle.schema_json["properties"]
+    assert "citations" in bundle.schema_json["properties"]
+
+
+def test_finalize_validates_and_returns_typed(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    ids = []
+    for body in ("postgres is open source",):
+        r = write(engine, SourceInput(kind="note", content=body))
+        ids.append(r.source_id)
+    bundle = summarize_prepare(engine, source_ids=ids)
+    raw = json.dumps({"summary": "postgres summary", "citations": ids})
+    out = summarize_finalize(engine, cache_key=bundle.cache_key, raw_output=raw)
+    assert isinstance(out, SummarizeOutput)
+    assert out.summary == "postgres summary"
+    assert out.citations == ids
+
+
+def test_prepare_second_call_returns_cached(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    ids = []
+    for body in ("alpha", "beta"):
+        r = write(engine, SourceInput(kind="note", content=body))
+        ids.append(r.source_id)
+    bundle1 = summarize_prepare(engine, source_ids=ids)
+    raw = json.dumps({"summary": "alpha and beta", "citations": ids})
+    summarize_finalize(engine, cache_key=bundle1.cache_key, raw_output=raw)
+    bundle2 = summarize_prepare(engine, source_ids=ids)
+    assert bundle2.cached is not None
+    assert bundle2.cached.summary == "alpha and beta"

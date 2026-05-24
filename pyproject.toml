@@ -15,6 +15,8 @@ dependencies = [
     "python-frontmatter>=1.1.0",
     "rich>=13.7.0",
     "fastembed>=0.7.0",
+    "tiktoken>=0.8",
+    "nltk>=3.9",
 ]
 
 [project.optional-dependencies]

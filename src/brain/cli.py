@@ -270,6 +270,49 @@ def status(ctx: click.Context) -> None:
     click.echo("tasks tracking lands Phase 3a")
 
 
+@main.command(name="promote-answer")
+@click.argument("cache_key_hex")
+@click.option("--kind", default="faq", help="Source kind for the promoted row (default: faq)")
+@click.option("--yes", is_flag=True, help="Skip interactive confirmation")
+@click.pass_context
+def promote_answer(ctx: click.Context, cache_key_hex: str, kind: str, yes: bool) -> None:
+    """Promote a cached reasoning output into a new captured source row."""
+    from sqlalchemy import text
+
+    from brain.db import session_scope
+
+    engine = ctx.obj["engine"]
+    try:
+        key = bytes.fromhex(cache_key_hex)
+    except ValueError:
+        click.echo(f"invalid cache key (must be hex): {cache_key_hex}", err=True)
+        ctx.exit(1)
+    with session_scope(engine) as s:
+        row = s.execute(
+            text("SELECT helper_name, output_json FROM reasoning_cache WHERE cache_key = :k"),
+            {"k": key},
+        ).fetchone()
+    if row is None:
+        click.echo(f"no cache row for key {cache_key_hex}", err=True)
+        ctx.exit(1)
+    helper_name, output_json = row
+    body = json.dumps(output_json, indent=2)
+    click.echo(f"helper: {helper_name}")
+    click.echo(body)
+    if not yes and not click.confirm("promote this answer into a new source row?"):
+        click.echo("aborted")
+        return
+    result = _write(
+        engine,
+        SourceInput(
+            kind=kind,  # type: ignore[arg-type]
+            content=body,
+            provenance_kind="synthesized",
+        ),
+    )
+    click.echo(json.dumps(result.model_dump()))
+
+
 @main.command()
 @click.argument("vault_path", type=click.Path(exists=True, path_type=Path))
 @click.pass_context

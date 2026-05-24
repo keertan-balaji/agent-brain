@@ -225,6 +225,52 @@ def decide(ctx: click.Context, title: str, project: str) -> None:
 
 
 @main.command()
+@click.pass_context
+def status(ctx: click.Context) -> None:
+    """Snapshot: active projects, recent captures, recent failures."""
+    from sqlalchemy import text
+
+    from brain.db import session_scope
+
+    engine = ctx.obj["engine"]
+    with session_scope(engine) as s:
+        active_projects = s.execute(
+            text(
+                "SELECT slug, status, updated_at FROM projects WHERE status='active' ORDER BY updated_at DESC LIMIT 20"
+            )
+        ).fetchall()
+        captures_7d = s.execute(
+            text(
+                "SELECT kind, COUNT(*) FROM sources WHERE created_at > NOW() - INTERVAL '7 days' GROUP BY kind ORDER BY 2 DESC"
+            )
+        ).fetchall()
+        recent_failures = s.execute(
+            text(
+                "SELECT target_problem, attempted_approach, retry_count, last_attempted_at FROM failure_memories WHERE t_valid_to IS NULL ORDER BY last_attempted_at DESC LIMIT 5"
+            )
+        ).fetchall()
+
+    t1 = Table("project slug", "status", "updated_at", title="Active projects")
+    for r in active_projects:
+        t1.add_row(str(r[0]), str(r[1]), str(r[2]))
+    console.print(t1)
+
+    t2 = Table("kind", "n (past 7d)", title="Recent captures")
+    for r in captures_7d:
+        t2.add_row(str(r[0]), str(r[1]))
+    console.print(t2)
+
+    t3 = Table(
+        "problem", "approach", "retries", "last attempt", title="Recent failures (top 5)"
+    )
+    for r in recent_failures:
+        t3.add_row(str(r[0])[:50], str(r[1])[:50], str(r[2]), str(r[3]))
+    console.print(t3)
+
+    click.echo("tasks tracking lands Phase 3a")
+
+
+@main.command()
 @click.argument("vault_path", type=click.Path(exists=True, path_type=Path))
 @click.pass_context
 def reingest(ctx: click.Context, vault_path: Path) -> None:

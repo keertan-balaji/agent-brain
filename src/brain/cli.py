@@ -202,6 +202,41 @@ def cite_finalize_cmd(ctx: click.Context, source_ids: str, cache_key: str, outpu
     click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
 
 
+@main.group()
+@click.pass_context
+def revise(ctx: click.Context) -> None:
+    """Prepare/finalize the revise_on_ingest reasoning helper (A-MEM plan)."""
+
+
+@revise.command("prepare")
+@click.option("--source-id", "new_source_id", required=True, type=int, help="New source id to revise around")
+@click.pass_context
+def revise_prepare_cmd(ctx: click.Context, new_source_id: int) -> None:
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.reasoning.revise_on_ingest import revise_prepare as _prep
+
+    embedder = BgeM3Embedder()
+    bundle = _prep(ctx.obj["engine"], new_source_id=new_source_id, embedder=embedder)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@revise.command("finalize")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def revise_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.revise_on_ingest import revise_finalize as _fin
+
+    plan = _fin(ctx.obj["engine"], cache_key=bytes.fromhex(cache_key), raw_output=output)
+    click.echo(json.dumps(plan.model_dump(mode="json"), indent=2))
+
+
 @main.command()
 @click.option("--threshold", default=3, type=int)
 @click.pass_context

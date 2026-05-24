@@ -20,6 +20,7 @@ from brain.db import session_scope
 from brain.embed.bge_m3 import BgeM3Embedder
 from brain.retrieval.fts import fts_search
 from brain.retrieval.rrf import rrf_fuse
+from brain.retrieval.tau import default_tau_for, should_abstain
 from brain.retrieval.vector import knn_search
 from brain.schemas import Bucket
 
@@ -57,6 +58,19 @@ def _hydrate(engine: Engine, ids_with_scores: list[tuple[int, float]]) -> list[R
     ]
 
 
+def _tau_or_abstain(
+    scored: list[tuple[int, float]],
+    *,
+    buckets: list[Bucket] | None,
+    tau: float | None,
+) -> list[tuple[int, float]]:
+    effective = tau if tau is not None else default_tau_for(buckets[0] if buckets else None)
+    top = scored[0][1] if scored else None
+    if should_abstain(top_score=top, tau=effective):
+        return []
+    return scored
+
+
 def recall(
     engine: Engine,
     query: str,
@@ -69,9 +83,16 @@ def recall(
     embedder: BgeM3Embedder | None = None,
     reranker: "MxbaiReranker | None" = None,
     rerank_candidate_pool: int = 50,
+    tau: float | None = None,
 ) -> list[RecallHit]:
     """Hybrid retrieval. embedder=None -> FTS-only (Phase 1 behavior).
-    reranker=None -> RRF fused order; reranker set -> cross-encoder finalizes."""
+    reranker=None -> RRF fused order; reranker set -> cross-encoder finalizes.
+
+    tau: per-bucket score floor. If None, derived from first bucket (or
+    conservative default). FTS-only branch only enforces tau when caller
+    sets it explicitly (ts_rank scores are unbounded and small, so the
+    calibrated defaults would always abstain on Phase 1 results).
+    """
     over_k = max(100, k * 10)
     fts_hits = fts_search(
         engine,
@@ -86,7 +107,10 @@ def recall(
 
     if embedder is None:
         scored = [(h.source_id, h.score) for h in fts_hits[:k]]
-        return _hydrate(engine, scored)
+        # FTS-only path: tau abstain only applied if caller explicitly set tau
+        if tau is None:
+            return _hydrate(engine, scored)
+        return _hydrate(engine, _tau_or_abstain(scored, buckets=buckets, tau=tau))
 
     vec_hits = knn_search(engine, query_text=query, embedder=embedder, k=over_k)
     vec_ids = [h.parent_source_id for h in vec_hits]
@@ -94,11 +118,11 @@ def recall(
     fused = rrf_fuse([fts_ids, vec_ids])
 
     if reranker is None:
-        return _hydrate(engine, fused[:k])
+        return _hydrate(engine, _tau_or_abstain(fused[:k], buckets=buckets, tau=tau))
 
     pool = fused[:rerank_candidate_pool]
     hydrated_pool = _hydrate(engine, pool)
     cands = [(h.id, h.content) for h in hydrated_pool]
     reranked = reranker.rerank(query, cands, top_k=k)
     scored = [(h.doc_id, h.score) for h in reranked]
-    return _hydrate(engine, scored)
+    return _hydrate(engine, _tau_or_abstain(scored, buckets=buckets, tau=tau))

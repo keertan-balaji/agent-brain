@@ -348,3 +348,53 @@ def test_orm_round_trip_project_and_source(pg_url: str) -> None:
     assert loaded.provenance_kind == "captured"
     assert loaded.generation_depth == 0
     assert loaded.status == "active"
+
+
+def test_phase2_orm_round_trip(pg_url: str) -> None:
+    from brain.models import CostLog, ExtractedClaim, ReasoningCache
+
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        sid = s.execute(
+            text(
+                "INSERT INTO sources(kind, content, content_hash) "
+                "VALUES ('note','c',sha256('cphase2'::bytea)) RETURNING id"
+            )
+        ).scalar()
+        claim = ExtractedClaim(
+            source_id=sid,
+            subject="postgres",
+            predicate="supports",
+            object="halfvec",
+            evidence_span_start=0,
+            evidence_span_end=10,
+            confidence=0.92,
+            extracted_by_model="claude-haiku",
+        )
+        s.add(claim)
+        cache = ReasoningCache(
+            cache_key=b"\x00" * 32,
+            helper_name="summarize",
+            input_hash=b"\x01" * 32,
+            llm_model_id="claude-haiku",
+            llm_model_ver="2024-10-22",
+            prompt_ver="v1",
+            output_json={"summary": "hi"},
+            tokens_used=42,
+        )
+        s.add(cache)
+        log = CostLog(
+            helper="summarize",
+            llm_model="claude-haiku",
+            tokens_in=100,
+            tokens_out=50,
+            usd=0.0001,
+        )
+        s.add(log)
+    with session_scope(engine) as s:
+        n = s.execute(text("SELECT COUNT(*) FROM extracted_claims")).scalar()
+        assert n >= 1
+        n = s.execute(text("SELECT COUNT(*) FROM reasoning_cache")).scalar()
+        assert n >= 1
+        n = s.execute(text("SELECT COUNT(*) FROM cost_log")).scalar()
+        assert n >= 1

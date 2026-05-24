@@ -357,3 +357,72 @@ class SessionResumeBundle(Base):
     token_budget: Mapped[int] = mapped_column(Integer, nullable=False)
     manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     rendered: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class Embedding1024(Base):
+    __tablename__ = "embeddings_1024"
+    source_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("sources.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    model_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    model_ver: Mapped[str] = mapped_column(Text, primary_key=True)
+    # vec column is HALFVEC(1024) — SQLAlchemy lacks a halfvec type; insert/select via raw SQL.
+    embedded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ExtractedClaim(Base):
+    __tablename__ = "extracted_claims"
+    __table_args__ = (
+        CheckConstraint("confidence BETWEEN 0 AND 1", name="extracted_claims_confidence_check"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    source_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("sources.id"), nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    predicate: Mapped[str] = mapped_column(Text, nullable=False)
+    object: Mapped[str] = mapped_column(Text, nullable=False)
+    qualifier: Mapped[str | None] = mapped_column(Text)
+    evidence_span_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    evidence_span_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    extracted_by_model: Mapped[str] = mapped_column(Text, nullable=False)
+    extracted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    t_valid_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    t_valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReasoningCache(Base):
+    __tablename__ = "reasoning_cache"
+    cache_key: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
+    helper_name: Mapped[str] = mapped_column(Text, nullable=False)
+    input_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    llm_model_id: Mapped[str] = mapped_column(Text, nullable=False)
+    llm_model_ver: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_ver: Mapped[str] = mapped_column(Text, nullable=False)
+    output_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    tokens_used: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    hit_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+
+
+class CostLog(Base):
+    __tablename__ = "cost_log"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("sessions.id"))
+    helper: Mapped[str] = mapped_column(Text, nullable=False)
+    llm_model: Mapped[str] = mapped_column(Text, nullable=False)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False)
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False)
+    usd: Mapped[float] = mapped_column(Float, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

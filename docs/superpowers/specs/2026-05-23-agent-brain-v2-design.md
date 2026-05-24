@@ -116,10 +116,19 @@ CREATE TABLE sources (
   -- Provenance
   parent_id       BIGINT REFERENCES sources(id), -- for chunks of a larger document
   span_start      INT,                  -- char offset in parent
-  span_end        INT
+  span_end        INT,
+  -- Provenance discipline: distinguish observed/captured content from synthesized content.
+  -- This is load-bearing for brain-rot prevention — synthesized content is down-weighted at
+  -- retrieval to prevent the recursive-training drift documented in Oct-2025 LLM brain rot work.
+  provenance_kind TEXT NOT NULL DEFAULT 'captured'
+                  CHECK (provenance_kind IN ('captured','ingested','synthesized','user_authored')),
+  synthesized_from BIGINT[],            -- if provenance_kind='synthesized', source_ids that produced this
+  -- Free-form flags JSONB for sanitizer, suspicious-content markers, etc.
+  flags           JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 CREATE INDEX sources_kind_idx ON sources(kind);
 CREATE INDEX sources_validity_idx ON sources(t_valid_from, t_valid_to);
+CREATE INDEX sources_provenance_idx ON sources(provenance_kind);
 -- Partial unique: only one CURRENTLY-VALID row per content hash. Invalidated rows free the slot.
 CREATE UNIQUE INDEX sources_hash_active_idx ON sources(content_hash) WHERE t_valid_to IS NULL;
 -- Non-unique hash index for dedup lookups across the whole history.
@@ -314,6 +323,48 @@ CREATE INDEX failure_memories_approach_idx ON failure_memories USING GIN(to_tsve
 Recall flow: when an agent is about to attempt approach A for problem P, the brain runs `failure_memories WHERE target_problem ~ P AND attempted_approach ~ A AND t_valid_to IS NULL` (with fuzzy match via tsvector or vector similarity on the two columns). A hit → surface "you tried this before, retry_count=N, lesson: …" before the agent commits the attempt.
 
 Invalidation: if the same approach later succeeds (root cause was environmental, since fixed), the failure row is invalidated with `invalidation_reason='superseded by success at <event_id>'`. The history is preserved.
+
+### Procedural memory (Memp lifecycle)
+
+Procedures (recipes, heuristics, learned skills) need explicit Build / Retrieve / Update / Deprecate state — otherwise the procedural store rots: deprecated recipes get re-applied, succession isn't tracked, and there's no signal of which procedures actually work in practice. The Memp paper (arxiv 2508.06433, v2 Apr 2026) formalizes this; we adopt the lifecycle.
+
+```sql
+CREATE TABLE procedures (
+  id                 BIGSERIAL PRIMARY KEY,
+  source_id          BIGINT NOT NULL REFERENCES sources(id),  -- narrative body
+  title              TEXT NOT NULL,
+  target_situation   TEXT NOT NULL,            -- "Postgres install on Arch", "FastAPI dep injection cycle"
+  granularity        TEXT NOT NULL CHECK (granularity IN ('step','script')),
+                                                -- step = human-readable step list
+                                                -- script = executable / structured automation
+  build_method       TEXT NOT NULL CHECK (build_method IN
+                       ('distilled_from_episodes','user_authored','imported','llm_proposed')),
+  built_from         BIGINT[],                  -- episode/subtask ids if distilled
+  success_count      INT NOT NULL DEFAULT 0,
+  failure_count      INT NOT NULL DEFAULT 0,
+  last_applied_at    TIMESTAMPTZ,
+  last_outcome       TEXT CHECK (last_outcome IN ('success','failure','partial','unknown')),
+  deprecated_at      TIMESTAMPTZ,               -- NULL = active. Set when superseded.
+  superseded_by      BIGINT REFERENCES procedures(id),
+  project_id         BIGINT REFERENCES projects(id),
+  t_valid_from       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  t_valid_to         TIMESTAMPTZ,
+  UNIQUE (target_situation, granularity, deprecated_at)  -- one active step + one active script per situation
+);
+CREATE INDEX procedures_active_idx ON procedures(target_situation) WHERE deprecated_at IS NULL;
+CREATE INDEX procedures_outcome_idx ON procedures(last_outcome, last_applied_at DESC);
+```
+
+**Dual-granularity rule (Memp result that transfers across models):** for each `target_situation`, the brain may store one `granularity='step'` (human/agent-readable steps) AND one `granularity='script'` (executable abstraction). Stronger models build procedures; weaker models apply them. Both forms cohabit; retrieval picks based on the caller's capability.
+
+**Procedure update workflow** (run by the agent after each application):
+1. Apply procedure → record outcome via `events.kind='reflection'` linking to `procedure_id`.
+2. Increment `success_count` or `failure_count`.
+3. Update `last_applied_at`, `last_outcome`.
+4. If `failure_count > 0.5 * (success_count + failure_count)` AND total applications ≥ 5 → flag for review (deprecation candidate).
+5. If a newer procedure proposed for the same `target_situation` accumulates better outcome stats → manual or human-gated `deprecated_at = NOW()`, `superseded_by = new_id`.
+
+**Retrieval rule:** procedures with `deprecated_at IS NOT NULL` are never returned to the agent for application. They remain queryable for history/audit (`brain-health` shows deprecation rate per project).
 
 ### Compaction-survival bundles (the headline feature)
 
@@ -615,6 +666,33 @@ Default thresholds at which the reranker's top-1 score causes the system to retu
 
 Abstain beats wrong is the policy, but failure memory specifically benefits from low τ — surfacing near-misses ("you tried something similar 2 weeks ago, here's the lesson") is the point.
 
+**FP-target tuning for auto-mutation passes (ClueBot NG framing).** READ thresholds and WRITE/MUTATE thresholds are different problems. For passes that mutate the brain (auto-deprecate procedures, link-back rewrites by `revise_on_ingest`, contradiction surfacing by `brain-health`), calibrate against a **target false-positive rate**, not accuracy. Default targets:
+
+| Auto-mutation pass | Target FP rate | Reasoning |
+|---|---|---|
+| `revise_on_ingest` link-back rewrites (semantic bucket) | ≤ 5% | Human-gated; FP just adds review burden |
+| `revise_on_ingest` link-back rewrites (episodic/failure) | ≤ 10% | Unattended; minor drift acceptable |
+| Auto-deprecate procedures (success/failure ratio) | ≤ 2% | Deprecation is sticky; FP loses real knowledge |
+| Contradiction prompts to user (`brain-health` NLI pass) | ≤ 1 prompt/week false positive | Nuisance prompts erode user trust |
+| Auto-invalidate stale `active` claims | ≤ 5% | Bi-temporal preserves history; cost is recall noise |
+
+Calibration set: hand-labeled subset of `retrieval_log` + paired NLI labels. Re-calibrate per release. **Mutations of `provenance_kind='captured'` rows require strictly higher confidence than mutations of `'synthesized'` rows** — captured content is ground truth; synthesized content is conjecture.
+
+#### Synthesized-content retrieval down-weight (brain-rot defense)
+
+The Oct-2025 LLM brain-rot study (recursive training on junk → irreversible representational drift) applies to retrieval too. As `brain-promote-answer` and `revise_on_ingest` add `provenance_kind='synthesized'` rows, the corpus accumulates LLM-derived content alongside captured content. Without a counterweight, semantic search increasingly surfaces synthesis-of-synthesis rather than ground truth.
+
+**Down-weight rule.** At RRF fusion time, multiply the rank score of `provenance_kind='synthesized'` rows by a recency-aware factor:
+
+```
+weight(row) = 1.0                                  if provenance_kind = 'captured' or 'ingested'
+            = 0.7 * (1.0 / (1 + generation_depth)) if provenance_kind = 'synthesized'
+```
+
+`generation_depth` is recursive: a synthesized row built only from captured rows has depth 1; a synthesized row that includes another synthesized row in `synthesized_from` has depth 2; and so on. Computed at write time, stored as a column. Hard cap at depth 3 — beyond that, the row is excluded from semantic retrieval (still queryable by direct ID).
+
+**Result-set diversity cap.** If a candidate result set contains > 60% synthesized rows, the retriever automatically expands the candidate pool to surface more captured content. This is what prevents the "the brain only finds its own prior thoughts" failure mode.
+
 #### Provenance and consolidation tracking
 
 Every retrieval call writes a row to `retrieval_log`:
@@ -673,9 +751,19 @@ Phase 4 adds: structural anomaly detection, embedding-time prompt-injection dete
 #### Eval
 
 - **Hand-curated 50–100-question eval set** against this very repo's content (the brain about the brain). Captures real query patterns from session transcripts.
-- **LongMemEval** (ICLR 2025) and **MemoryAgentBench** (ICLR 2026) for cross-comparison with the field.
-- Track precision/recall@k, MRR, abstain rate, and **retrieved-vs-used ratio** from `retrieval_log`.
+- **LongMemEval-V2** (arxiv 2605.12493, real web-agent trajectories, the V1 successor) + **MemoryAgentBench** (ICLR 2026, explicit "session N+1 uses session N" protocol) + **BEAM** for long-context. The MemoryAgentBench protocol *is* our compounding metric — we don't need to invent one.
+- Track precision/recall@k, MRR, abstain rate, **retrieved-vs-used ratio** from `retrieval_log`, and **synthesized:captured ratio** per result set (brain-rot guard).
 - Threshold τ is swept on the hand-curated set; pick the precision/recall knee.
+
+**Compounding regression test (the only honest answer to "is the brain working").** Weekly automated job:
+
+1. Replay the last 7 days of `sessions` from `events` history (deterministic — events are timestamped).
+2. For each session, identify a representative recall query the agent issued and the source(s) that ended up being `selected` in `retrieval_log`.
+3. Re-run the same query against the **current** brain state.
+4. Score: did the same sources rank as high or higher? Did any new sources surface that should have been there earlier (a "now I know it" hit)?
+5. Track the trend: a brain that's actually compounding shows monotonically improving recall on its own historical queries over time.
+
+If the trend is flat or negative for 4 weeks running, the brain is rotting or sprawling without consolidation — `brain-health` escalates.
 
 ## Reasoning helpers (higher-order operations)
 
@@ -693,6 +781,7 @@ Organized by what kind of thinking they support. Operations compose: `plan_resea
 | `extract_disagreement(sources)` | sources | `[{claim_a, claim_b, axis, source_a_span, source_b_span}]` — axis ∈ scope/time/mechanism/evidence | yes |
 | `compare(a_id, b_id)` | two sources | side-by-side: agreements / disagreements / scope diff | yes |
 | `contrast(query, candidate_ids[])` | question + candidates | which best answers, why others miss | yes |
+| `revise_on_ingest(new_source_id)` | a newly-ingested source | list of affected existing pages, with revision summaries + contradiction flags. **Implements the A-MEM "writes are mutations, not appends" pattern**: on ingest, retrieve top-k semantically neighboring sources, propose updates (link-back rewrites, metadata refresh, contradiction notes), apply via bi-temporal invalidation + new versions. Human-gated for `bucket=semantic` revisions. | yes |
 
 ### Category B — Causal reasoning (trace mechanism through episodic chain)
 
@@ -960,6 +1049,7 @@ Schema scope: `sources`, `sources_fts`, `memory_classifications`, `projects`, `s
 - Per-bucket τ thresholds + abstain
 - Reasoning helpers Fast-tier: `summarize`, `compare`, `cite`, `propose_links` (with grounding policy + structured JSON outputs)
 - `brain-link`, `brain-decide`, `brain-status` skills
+- **`brain-promote-answer`** skill — promotes a high-confidence `reasoning_cache` entry into a permanent `sources` row with `provenance_kind='synthesized'` and `synthesized_from = [input_source_ids]`. Human-gated. Closes the "good answers shouldn't disappear into chat history" gap. Requires the `synthesized` retrieval down-weight (see §Retrieval hardening) to be safe at scale — without it, the brain incrementally pollutes itself with its own prior outputs (the brain-rot failure mode).
 - **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. All four building blocks already exist; this skill names the composition + ships a default Obsidian render template.
 
 ### Phase 3a — Capture fidelity + compaction-survival (the cognition-preservation core)
@@ -987,11 +1077,13 @@ Schema scope: `sources`, `sources_fts`, `memory_classifications`, `projects`, `s
 - HyDE for keyword-poor queries (conditional)
 - Query decomposition for multi-hop queries
 
-### Phase 4 — Power features + multi-platform
+### Phase 4 — Power features + multi-platform + maintenance loops
 
 - Tree-sitter symbol index (Python helper, populated `entities` + `edges`)
 - Knowledge-graph traversal helpers (`brain-graph-walk`)
-- `brain-health` (audit, vacuum, re-embed, invalidate stale)
+- **`brain-health` extended to "generative lint"** — beyond audit (find broken FKs, dead wikilinks, stale-active rows): nightly NLI pass over top-k semantically similar chunks (knowledgebase_guardian pattern, contradiction surfacing) + `identify_gaps` + `find_contradictions` orchestration. **Surfaces results as user-facing questions** (ARIA pattern: "is X still true given Y? [yes/no]"), not silent flags. Tunable per §Retrieval hardening to a target false-positive rate (ClueBot NG framing: 10 missed contradictions beat 1 spurious user prompt).
+- **`brain-schema-evolve`** skill — periodic (or user-invoked) reviews `retrieval_log` patterns, capture-failure stats, and recurring user corrections to propose specific `_meta/AGENTS.md` amendments. Treats schema as living code, not scripture. Human-gated. Closes the LLM-Wiki article's "schema co-evolution" pattern.
+- **`brain-sleep-time`** (Letta sleep-time-compute pattern, arxiv 2504.13171) — background pass during idle: pre-compute FAQs derived from recent captures, distill summaries, refresh `session_resume_bundles` for active projects. Amortizes ~2.5× cost on later queries. Opt-in via `brain_config.sleep_time_compute=true`.
 - MCP server (exports brain tools to Cursor/Gemini/Codex)
 - Codex CLI hook adapter
 - Cross-tool handoff format (portable export)

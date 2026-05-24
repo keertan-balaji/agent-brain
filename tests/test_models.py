@@ -152,3 +152,35 @@ def test_memory_classifications_multi_bucket(pg_url: str) -> None:
             {"s": sid},
         ).fetchall()
     assert [b[0] for b in buckets] == ["episodic", "semantic"]
+
+
+def test_failure_memories_dedup_on_problem_approach(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        sid = s.execute(
+            text(
+                "INSERT INTO sources(kind, content, content_hash) "
+                "VALUES ('gotcha','docker permission denied',sha256('a'::bytea)) "
+                "RETURNING id"
+            )
+        ).scalar()
+        s.execute(
+            text(
+                "INSERT INTO failure_memories(source_id, target_problem, attempted_approach) "
+                "VALUES (:s, 'install pg on arch', 'docker compose pgvector')"
+            ),
+            {"s": sid},
+        )
+    raised = False
+    try:
+        with session_scope(engine) as s:
+            s.execute(
+                text(
+                    "INSERT INTO failure_memories(source_id, target_problem, attempted_approach) "
+                    "VALUES (:s, 'install pg on arch', 'docker compose pgvector')"
+                ),
+                {"s": sid},
+            )
+    except Exception as exc:
+        raised = "unique" in str(exc).lower() or "duplicate" in str(exc).lower()
+    assert raised

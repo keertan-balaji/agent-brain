@@ -19,6 +19,7 @@ from sqlalchemy import Engine, text
 from brain.db import session_scope
 from brain.embed.bge_m3 import BgeM3Embedder
 from brain.retrieval.fts import fts_search
+from brain.retrieval.provenance import apply_diversity_cap, downweight_synthesized
 from brain.retrieval.rrf import rrf_fuse
 from brain.retrieval.tau import default_tau_for, should_abstain
 from brain.retrieval.vector import knn_search
@@ -56,6 +57,20 @@ def _hydrate(engine: Engine, ids_with_scores: list[tuple[int, float]]) -> list[R
         RecallHit(id=r[0], kind=r[1], content=r[2], project_id=r[3], score=score_map[r[0]])
         for r in ordered
     ]
+
+
+def _load_provenance(engine: Engine, ids: list[int]) -> dict[int, tuple[str, int]]:
+    if not ids:
+        return {}
+    with session_scope(engine) as s:
+        rows = s.execute(
+            text(
+                "SELECT id, provenance_kind, generation_depth FROM sources "
+                "WHERE id = ANY(:ids)"
+            ),
+            {"ids": ids},
+        ).fetchall()
+    return {r[0]: (r[1], r[2]) for r in rows}
 
 
 def _tau_or_abstain(
@@ -117,11 +132,27 @@ def recall(
 
     fused = rrf_fuse([fts_ids, vec_ids])
 
+    # Load provenance for the top expanded pool + a wider expansion pool used by diversity cap
+    top_pool_size = max(rerank_candidate_pool, k * 3)
+    top_pool = fused[:top_pool_size]
+    expansion_pool = fused[top_pool_size : top_pool_size + 50]
+    all_ids = [d for d, _ in top_pool] + [d for d, _ in expansion_pool]
+    prov = _load_provenance(engine, all_ids)
+    top_prov = {d: prov[d] for d, _ in top_pool if d in prov}
+    pool_prov = {d: prov[d] for d, _ in expansion_pool if d in prov}
+
+    fused = downweight_synthesized(top_pool, top_prov)
+    fused = apply_diversity_cap(
+        fused[:k] if reranker is None else fused[:rerank_candidate_pool],
+        provenance=top_prov,
+        expansion_pool=expansion_pool,
+        pool_provenance=pool_prov,
+    )
+
     if reranker is None:
         return _hydrate(engine, _tau_or_abstain(fused[:k], buckets=buckets, tau=tau))
 
-    pool = fused[:rerank_candidate_pool]
-    hydrated_pool = _hydrate(engine, pool)
+    hydrated_pool = _hydrate(engine, fused)
     cands = [(h.id, h.content) for h in hydrated_pool]
     reranked = reranker.rerank(query, cands, top_k=k)
     scored = [(h.doc_id, h.score) for h in reranked]

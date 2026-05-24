@@ -351,7 +351,12 @@ def test_orm_round_trip_project_and_source(pg_url: str) -> None:
 
 
 def test_phase2_orm_round_trip(pg_url: str) -> None:
-    from brain.models import CostLog, ExtractedClaim, ReasoningCache
+    # CostLog ORM stays in place for now (deleted in T8) but the underlying
+    # table is dropped in migration 009 — so this test no longer inserts cost_log
+    # rows. ReasoningCache is inserted via raw SQL because the ORM still maps
+    # the now-dropped llm_model_id/llm_model_ver/tokens_used columns (T2 reshapes
+    # the ORM; here we just stop exercising the stale fields).
+    from brain.models import ExtractedClaim
 
     engine = get_engine(pg_url)
     with session_scope(engine) as s:
@@ -372,29 +377,22 @@ def test_phase2_orm_round_trip(pg_url: str) -> None:
             extracted_by_model="claude-haiku",
         )
         s.add(claim)
-        cache = ReasoningCache(
-            cache_key=b"\x00" * 32,
-            helper_name="summarize",
-            input_hash=b"\x01" * 32,
-            llm_model_id="claude-haiku",
-            llm_model_ver="2024-10-22",
-            prompt_ver="v1",
-            output_json={"summary": "hi"},
-            tokens_used=42,
+        s.execute(
+            text(
+                "INSERT INTO reasoning_cache(cache_key, helper_name, input_hash, "
+                "prompt_ver, output_json) "
+                "VALUES (:k, :h, :ih, :pv, CAST(:oj AS JSONB))"
+            ),
+            {
+                "k": b"\x00" * 32,
+                "h": "summarize",
+                "ih": b"\x01" * 32,
+                "pv": "v1",
+                "oj": '{"summary": "hi"}',
+            },
         )
-        s.add(cache)
-        log = CostLog(
-            helper="summarize",
-            llm_model="claude-haiku",
-            tokens_in=100,
-            tokens_out=50,
-            usd=0.0001,
-        )
-        s.add(log)
     with session_scope(engine) as s:
         n = s.execute(text("SELECT COUNT(*) FROM extracted_claims")).scalar()
         assert n >= 1
         n = s.execute(text("SELECT COUNT(*) FROM reasoning_cache")).scalar()
-        assert n >= 1
-        n = s.execute(text("SELECT COUNT(*) FROM cost_log")).scalar()
         assert n >= 1

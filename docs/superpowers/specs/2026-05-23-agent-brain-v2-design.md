@@ -677,20 +677,132 @@ Phase 4 adds: structural anomaly detection, embedding-time prompt-injection dete
 - Track precision/recall@k, MRR, abstain rate, and **retrieved-vs-used ratio** from `retrieval_log`.
 - Threshold τ is swept on the hand-curated set; pick the precision/recall knee.
 
-## Reasoning helpers
+## Reasoning helpers (higher-order operations)
 
-Each is a Python function exposed both as a CLI subcommand and as a skill. All operate over retrieval results, never against blind queries.
+These are what makes the brain a cognition substrate, not a notes app. Each is a Python function exposed both as a CLI subcommand and as a skill. All operate over **structured retrieval results**, never against blind queries — that's what makes them higher-order rather than LLM-wrapped grep.
 
-| Helper | Input | Output | LLM-grounded? |
+Organized by what kind of thinking they support. Operations compose: `plan_research` calls `decompose_question` calls `brain.recall` calls `synthesize_thesis` calls `identify_unknowns`. The brain orchestrates the cascade.
+
+### Category A — Synthesis (multi-source → unified understanding)
+
+| Helper | Input | Output | LLM |
 |---|---|---|---|
-| `summarize(source_ids[]) → text` | a set of sources | concise synthesis ≤500 tokens, with citations | yes |
-| `compare(a_id, b_id) → text` | two sources | side-by-side analysis: agreements, disagreements, scope difference | yes |
-| `contrast(query, candidate_ids[]) → text` | a question, candidates | which best answers, why others miss | yes |
-| `cite(claim_text) → sources[]` | a natural-language claim | sources that support it, with character spans | yes (entailment check) |
-| `extract_claims(source_id) → claims[]` | a paper / doc | structured claims (see schema below) | yes |
-| `propose_links(source_id) → candidate_ids[]` | a source | semantically/structurally related sources for `[[wikilinks]]` | no (pure retrieval) |
-| `generate_resume_bundle(project_id) → bundle` | a project | see §Compaction-survival bundles | partial (rendering only) |
-| `trace_data_flow(start_symbol, repo) → graph` | a code symbol | call graph / data flow extracted from `entities` + `edges` | no |
+| `summarize(source_ids[])` | sources | ≤500-token brief, every claim cited | yes |
+| `synthesize_thesis(sources, hypothesis)` | sources + claim text | `{verdict, evidence[], counter_evidence[], confidence}` | yes |
+| `extract_consensus(sources)` | sources | claims all sources agree on, with per-source citation | yes |
+| `extract_disagreement(sources)` | sources | `[{claim_a, claim_b, axis, source_a_span, source_b_span}]` — axis ∈ scope/time/mechanism/evidence | yes |
+| `compare(a_id, b_id)` | two sources | side-by-side: agreements / disagreements / scope diff | yes |
+| `contrast(query, candidate_ids[])` | question + candidates | which best answers, why others miss | yes |
+
+### Category B — Causal reasoning (trace mechanism through episodic chain)
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `trace_causality(event_id, hops=5)` | an event | event chain backward from here: what precursors led to this | partial (chain assembly is SQL; narration is LLM) |
+| `trace_consequences(event_id, hops=5)` | an event | event chain forward: what followed | partial |
+| `attribute_failure(failure_id)` | a failure_memories row | root-cause hypothesis + supporting event spans | yes (over deterministic event chain) |
+| `explain_outcome(subtask_id)` | a subtask | why it succeeded / failed, with cited events + failures + decisions | yes |
+
+### Category C — Abstraction (specific → general)
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `distill_pattern(subtask_ids[])` | N similar subtasks | candidate procedural recipe (Anthropic Skills format), with provenance to source subtasks | yes |
+| `generalize_failure(failure_id)` | a single failure | class-of-failures rule + scope conditions | yes |
+| `extract_invariants(sources)` | sources | what's true across all of these — surfaces latent assumptions | yes |
+
+### Category D — Decomposition (fuzzy → answerable)
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `decompose_question(query)` | fuzzy query | atomic sub-queries the recall layer can answer | yes |
+| `plan_research(topic, depth=2)` | topic | ordered structured plan: what to read, run, measure, in what order | yes (composes other helpers) |
+| `identify_unknowns(claim)` | a claim | what would need to be true for this to hold — surfaces hidden assumptions | yes |
+
+### Category E — Counterfactual
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `counterfactual(event_id, alternative_action)` | an event + a hypothetical alternative | predicted downstream change, using prior episodes as analogs | yes |
+| `predict_outcome(plan_text)` | a plan | likely outcome + confidence + per-step risk, drawn from failure_memories + procedural recipes | yes |
+
+### Category F — Meta-cognitive (brain reasoning about itself)
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `find_contradictions(scope)` | a scope (project / bucket / time window) | pairs of claims that conflict, with axes — semantic conflicts beyond bi-temporal | yes |
+| `identify_gaps(corpus)` | the corpus | under-represented topics relative to active projects | yes |
+| `assess_confidence(claim)` | a claim | calibrated confidence from evidence weight + source recency + retrieval abstain stats | yes |
+| `where_am_i_confused(session_id)` | a session | queries with low-confidence results, contradictions surfaced, abstain hits | no (pure SQL over retrieval_log) |
+
+### Category G — Procedural (Voyager skill-library analog)
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `propose_skill(episodic_set)` | N similar episodes | draft skill in Anthropic Skills format with provenance | yes |
+| `validate_skill(skill_id, episodic_set)` | existing skill + new episodes | drift detection: does the recipe still match practice? | yes |
+
+### Category H — Foundational (already covered, kept for completeness)
+
+| Helper | Input | Output | LLM |
+|---|---|---|---|
+| `cite(claim_text)` | a claim | sources that support it, character spans, entailment-checked | yes |
+| `extract_claims(source_id)` | a doc | structured claims (subject/predicate/object/qualifier), stored in `extracted_claims` | yes |
+| `propose_links(source_id)` | a source | semantically/structurally related sources for `[[wikilinks]]` | no |
+| `generate_resume_bundle(project_id)` | a project | see §Compaction-survival bundles | partial |
+| `trace_data_flow(symbol, repo)` | code symbol | call graph / data flow from `entities` + `edges` | no |
+
+### Composition example
+
+> Agent: "Why did the docker-compose Postgres install fail last month? Is the lesson generalizable?"
+
+```
+brain.recall(query="docker postgres install", deep=true)
+  → 3 candidates including failure_memories row F42
+attribute_failure(F42)
+  → trace_causality(events around F42)
+        → chain: [docker compose up] → [permission denied] → [agent reflects "uid mismatch"]
+  → root cause: "host volume uid mismatch under docker default user"
+synthesize_thesis(
+    sources=[F42, decision D17="use native install"],
+    hypothesis="docker-compose for Postgres is unreliable on Arch")
+  → {verdict: "supported", evidence: [...], confidence: 0.85}
+generalize_failure(F42)
+  → class rule: "Postgres + Arch + host-mounted volumes → prefer native install"
+  → written to procedural bucket as candidate recipe
+```
+
+One agent turn, four reasoning ops, one new procedural artifact. The brain orchestrates; the agent gets structured output back.
+
+### Composition is recursive
+
+`plan_research(topic)` for a research-mode user:
+
+```
+plan_research("vector quantization tradeoffs in 2026 pgvector")
+  ├─ decompose_question → [
+  │     "what quantization methods does pgvector support?",
+  │     "halfvec vs binary tradeoffs?",
+  │     "production reports of recall loss?",
+  │     "best practices from PostgresConf 2026"
+  │   ]
+  ├─ for each sub-query:
+  │     brain.recall(deep=true) → candidates
+  │     synthesize_thesis(candidates, sub_query) → finding
+  │     identify_unknowns(finding) → follow-up questions
+  ├─ extract_consensus(findings) → "established view"
+  ├─ extract_disagreement(findings) → "open debates"
+  └─ assess_confidence per finding
+  → returns: structured research plan + provisional answer + next-read list
+```
+
+### Grounding contract (applies to every LLM-grounded helper)
+
+1. Every output claim cites ≥1 `source_id` with a character span. Uncited claims are rejected and the helper retries once.
+2. Output is strict JSON matching the helper's schema. Schema mismatches retry up to 3 times then return `{"error": "schema_violation"}`.
+3. Cache key: `(helper_name, canonicalized_input_hash, llm_model_id, llm_model_ver, prompt_template_ver)`. Stored in `reasoning_cache`. Prompt version bump invalidates the cache.
+4. Token budget per helper declared in `brain_config.reasoning_budgets`. Exceed → return `{"error": "budget_exceeded", "tokens_used": X}`.
+5. Cost-capped per session per §Operational concerns. Hard fail or override-prompt, never silent overspend.
 
 ### Grounding policy (load-bearing spec commitment)
 

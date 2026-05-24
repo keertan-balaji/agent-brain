@@ -160,6 +160,48 @@ def compare_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> Non
     click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
 
 
+@main.group()
+@click.pass_context
+def cite(ctx: click.Context) -> None:
+    """Prepare/finalize the cite reasoning helper."""
+
+
+@cite.command("prepare")
+@click.option("--claim", "claim_text", required=True, help="Claim to find supporting spans for")
+@click.option("--source-ids", required=True, help="Comma-separated candidate source ids")
+@click.pass_context
+def cite_prepare_cmd(ctx: click.Context, claim_text: str, source_ids: str) -> None:
+    from brain.reasoning.cite import cite_prepare as _prep
+
+    ids = [int(x) for x in source_ids.split(",") if x.strip()]
+    bundle = _prep(ctx.obj["engine"], claim_text=claim_text, candidate_source_ids=ids)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@cite.command("finalize")
+@click.option("--source-ids", required=True, help="Comma-separated candidate source ids (for re-validation)")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def cite_finalize_cmd(ctx: click.Context, source_ids: str, cache_key: str, output: str) -> None:
+    from brain.reasoning.cite import cite_finalize as _fin
+
+    ids = [int(x) for x in source_ids.split(",") if x.strip()]
+    out = _fin(
+        ctx.obj["engine"],
+        candidate_source_ids=ids,
+        cache_key=bytes.fromhex(cache_key),
+        raw_output=output,
+    )
+    click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
+
+
 @main.command()
 @click.option("--threshold", default=3, type=int)
 @click.pass_context

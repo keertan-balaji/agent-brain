@@ -280,3 +280,44 @@ def test_entities_and_edges(pg_url: str) -> None:
     with session_scope(engine) as s:
         rel = s.execute(text("SELECT relation FROM edges")).scalar()
     assert rel == "cites"
+
+
+def test_retrieval_log_inserts(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        s.execute(
+            text(
+                "INSERT INTO retrieval_log(query, agent) VALUES ('hello world','claude-code')"
+            )
+        )
+    with session_scope(engine) as s:
+        q = s.execute(text("SELECT query FROM retrieval_log")).scalar()
+    assert q == "hello world"
+
+
+def test_session_resume_bundles_active_unique(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        pid = s.execute(
+            text("INSERT INTO projects(slug, task_type) VALUES ('rb','development') RETURNING id")
+        ).scalar()
+        s.execute(
+            text(
+                "INSERT INTO session_resume_bundles(project_id, trigger, token_budget, manifest, rendered) "
+                "VALUES (:p,'manual', 500, '{}'::jsonb, 'render1')"
+            ),
+            {"p": pid},
+        )
+    raised = False
+    try:
+        with session_scope(engine) as s:
+            s.execute(
+                text(
+                    "INSERT INTO session_resume_bundles(project_id, trigger, token_budget, manifest, rendered) "
+                    "VALUES (:p,'manual', 500, '{}'::jsonb, 'render2')"
+                ),
+                {"p": pid},
+            )
+    except Exception as exc:
+        raised = "unique" in str(exc).lower() or "duplicate" in str(exc).lower()
+    assert raised, "second active bundle for same project must violate partial unique index"

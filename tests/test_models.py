@@ -351,11 +351,11 @@ def test_orm_round_trip_project_and_source(pg_url: str) -> None:
 
 
 def test_phase2_orm_round_trip(pg_url: str) -> None:
-    # CostLog ORM stays in place for now (deleted in T8) but the underlying
-    # table is dropped in migration 009 — so this test no longer inserts cost_log
-    # rows. ReasoningCache is inserted via raw SQL because the ORM still maps
-    # the now-dropped llm_model_id/llm_model_ver/tokens_used columns (T2 reshapes
-    # the ORM; here we just stop exercising the stale fields).
+    # CostLog ORM was removed in T8 along with the embedded-LLM coupling.
+    # Migration 009 drops the underlying cost_log table. ReasoningCache is
+    # inserted via raw SQL because the ORM still maps the now-dropped
+    # llm_model_id/llm_model_ver/tokens_used columns (T2 reshapes the ORM;
+    # here we just stop exercising the stale fields).
     from brain.models import ExtractedClaim
 
     engine = get_engine(pg_url)

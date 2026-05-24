@@ -16,7 +16,7 @@ from sqlalchemy import Engine, text
 from brain.db import session_scope
 from brain.reasoning.base import GroundedHelper, PromptBundle
 
-_PROMPT_PATH = Path(__file__).parent.parent / "llm" / "prompts" / "cite.txt"
+_PROMPT_PATH = Path(__file__).parent / "prompts" / "cite.txt"
 _PROMPT_TEMPLATE = _PROMPT_PATH.read_text()
 _PROMPT_VER = "v2"
 _HELPER_NAME = "cite"

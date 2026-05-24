@@ -21,7 +21,7 @@ from brain.embed.bge_m3 import BgeM3Embedder
 from brain.reasoning.base import GroundedHelper, PromptBundle
 from brain.reasoning.propose_links import propose_links
 
-_PROMPT_PATH = Path(__file__).parent.parent / "llm" / "prompts" / "revise_on_ingest.txt"
+_PROMPT_PATH = Path(__file__).parent / "prompts" / "revise_on_ingest.txt"
 _PROMPT_TEMPLATE = _PROMPT_PATH.read_text()
 _PROMPT_VER = "v2"
 _HELPER_NAME = "revise_on_ingest"

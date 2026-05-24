@@ -412,17 +412,3 @@ class ReasoningCache(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     hit_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
-
-
-class CostLog(Base):
-    __tablename__ = "cost_log"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    session_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("sessions.id"))
-    helper: Mapped[str] = mapped_column(Text, nullable=False)
-    llm_model: Mapped[str] = mapped_column(Text, nullable=False)
-    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False)
-    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False)
-    usd: Mapped[float] = mapped_column(Float, nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )

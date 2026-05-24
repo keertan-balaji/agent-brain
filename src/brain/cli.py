@@ -154,6 +154,45 @@ def export_cmd(ctx: click.Context, out: Path | None) -> None:
 
 
 @main.command()
+@click.argument("source_id", type=int)
+@click.option("-k", "top_k", default=5, type=int, help="Max suggestions to show (default 5)")
+@click.pass_context
+def link(ctx: click.Context, source_id: int, top_k: int) -> None:
+    """Suggest related sources for SOURCE_ID via FTS + vector + entity-graph."""
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.reasoning.propose_links import propose_links as _propose
+
+    engine = ctx.obj["engine"]
+    embedder = BgeM3Embedder()
+    result = _propose(engine, source_id=source_id, embedder=embedder, top_k=top_k)
+    if not result.proposals:
+        click.echo("no link candidates")
+        return
+    from sqlalchemy import text
+
+    from brain.db import session_scope
+
+    ids = [p.target_source_id for p in result.proposals]
+    with session_scope(engine) as s:
+        rows = s.execute(
+            text("SELECT id, kind, content FROM sources WHERE id = ANY(:ids)"),
+            {"ids": ids},
+        ).fetchall()
+    by_id = {r[0]: (r[1], r[2]) for r in rows}
+    table = Table("target_id", "kind", "score", "rationale", "head")
+    for p in result.proposals:
+        kind, content = by_id.get(p.target_source_id, ("?", ""))
+        table.add_row(
+            str(p.target_source_id),
+            kind,
+            f"{p.score:.3f}",
+            p.rationale_kind,
+            content[:60],
+        )
+    console.print(table)
+
+
+@main.command()
 @click.argument("vault_path", type=click.Path(exists=True, path_type=Path))
 @click.pass_context
 def reingest(ctx: click.Context, vault_path: Path) -> None:

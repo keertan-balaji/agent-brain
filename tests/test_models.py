@@ -184,3 +184,64 @@ def test_failure_memories_dedup_on_problem_approach(pg_url: str) -> None:
     except Exception as exc:
         raised = "unique" in str(exc).lower() or "duplicate" in str(exc).lower()
     assert raised
+
+
+def test_events_round_trip(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        pid = s.execute(
+            text("INSERT INTO projects(slug, task_type) VALUES ('ep','development') RETURNING id")
+        ).scalar()
+        sid = s.execute(
+            text(
+                "INSERT INTO sessions(project_id, agent) VALUES (:p,'claude-code') RETURNING id"
+            ),
+            {"p": pid},
+        ).scalar()
+        s.execute(
+            text(
+                "INSERT INTO events(session_id, ordinal, kind, tool, status) "
+                "VALUES (:s, 1, 'tool_call', 'Bash', 'ok')"
+            ),
+            {"s": sid},
+        )
+    with session_scope(engine) as s:
+        row = s.execute(text("SELECT kind, tool, status FROM events")).fetchone()
+    assert row == ("tool_call", "Bash", "ok")
+
+
+def test_procedures_partial_unique_active(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        sid = s.execute(
+            text(
+                "INSERT INTO sources(kind, content, content_hash) "
+                "VALUES ('pattern','x',sha256('procx'::bytea)) RETURNING id"
+            )
+        ).scalar()
+        s.execute(
+            text(
+                "INSERT INTO procedures(source_id, title, target_situation, granularity, build_method) "
+                "VALUES (:s, 't', 'install x', 'step', 'user_authored')"
+            ),
+            {"s": sid},
+        )
+    raised = False
+    try:
+        with session_scope(engine) as s:
+            sid2 = s.execute(
+                text(
+                    "INSERT INTO sources(kind, content, content_hash) "
+                    "VALUES ('pattern','y',sha256('procy'::bytea)) RETURNING id"
+                )
+            ).scalar()
+            s.execute(
+                text(
+                    "INSERT INTO procedures(source_id, title, target_situation, granularity, build_method) "
+                    "VALUES (:s, 't2', 'install x', 'step', 'user_authored')"
+                ),
+                {"s": sid2},
+            )
+    except Exception as exc:
+        raised = "unique" in str(exc).lower() or "duplicate" in str(exc).lower()
+    assert raised, "second active step for same situation must violate partial unique index"

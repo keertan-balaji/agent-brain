@@ -1,0 +1,17 @@
+You are finding spans of text that support a given claim. For each source provided, decide whether any contiguous span supports the claim. Output strict JSON matching:
+
+{{
+  "supporting_sources": [
+    {{"source_id": <int>, "span_start": <int>, "span_end": <int>, "excerpt": "<verbatim text from source>"}}
+  ]
+}}
+
+The `excerpt` must be copied verbatim from the source content. `span_start` and `span_end` are 0-indexed char offsets into the source's content. Omit sources that do not support the claim.
+
+Claim:
+{claim_text}
+
+Candidate sources:
+{sources}
+
+Output JSON only. No prose around it.

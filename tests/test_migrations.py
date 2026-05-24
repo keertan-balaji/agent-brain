@@ -44,3 +44,31 @@ def test_downgrade_base_drops_brain_config(pg_url: str) -> None:
     # Restore head so subsequent tests (which rely on the session-scoped fixture
     # having applied migrations) still see a populated schema.
     subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)
+
+
+def test_phase2_tables_exist(pg_url: str) -> None:
+    """embeddings_1024, extracted_claims, reasoning_cache, cost_log."""
+    engine = get_engine(pg_url)
+    with engine.connect() as conn:
+        existing = conn.execute(
+            text(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'public'"
+            )
+        ).fetchall()
+    table_names = {r[0] for r in existing}
+    for required in ("embeddings_1024", "extracted_claims", "reasoning_cache", "cost_log"):
+        assert required in table_names, f"missing Phase 2 table: {required}"
+
+
+def test_embeddings_hnsw_index_exists(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = 'public' AND tablename = 'embeddings_1024'"
+            )
+        ).fetchall()
+    idx = {r[0] for r in rows}
+    assert "embeddings_1024_hnsw_idx" in idx

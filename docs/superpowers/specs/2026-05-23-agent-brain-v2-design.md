@@ -702,6 +702,9 @@ Organized by what kind of thinking they support. Operations compose: `plan_resea
 | `trace_consequences(event_id, hops=5)` | an event | event chain forward: what followed | partial |
 | `attribute_failure(failure_id)` | a failure_memories row | root-cause hypothesis + supporting event spans | yes (over deterministic event chain) |
 | `explain_outcome(subtask_id)` | a subtask | why it succeeded / failed, with cited events + failures + decisions | yes |
+| `entity_timeline(entity_id, from?, to?)` | an entity + optional date range | chronological list of every event, decision, failure, and source referencing this entity, with span citations | no (pure SQL over `events` + `edges`) |
+
+`entity_timeline` answers questions like "show me everything I did to the auth module last week" or "every decision and failure connected to pgvector in this project." It's a SQL-only helper (no LLM), driven by the `entities` + `edges` + `events` schema already in spec. Output is structured `[{occurred_at, kind, source_id, summary, role}]` ordered by time — the caller decides whether to feed it to `summarize` for a narrative or render directly as a timeline view.
 
 ### Category C — Abstraction (specific → general)
 
@@ -957,6 +960,7 @@ Schema scope: `sources`, `sources_fts`, `memory_classifications`, `projects`, `s
 - Per-bucket τ thresholds + abstain
 - Reasoning helpers Fast-tier: `summarize`, `compare`, `cite`, `propose_links` (with grounding policy + structured JSON outputs)
 - `brain-link`, `brain-decide`, `brain-status` skills
+- **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. All four building blocks already exist; this skill names the composition + ships a default Obsidian render template.
 
 ### Phase 3a — Capture fidelity + compaction-survival (the cognition-preservation core)
 

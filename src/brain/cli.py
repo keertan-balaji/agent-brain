@@ -114,6 +114,14 @@ def health(ctx: click.Context, threshold: int) -> None:
         console.print(
             f"[yellow]stale active-status sources (>90d): {report.stale_active_count}[/]"
         )
+    t_tau = Table(
+        "bucket",
+        "tau-rolling ratio",
+        title="Recent selected/candidates ratio (past 100 queries)",
+    )
+    for bucket, ratio in sorted(report.tau_rolling_ratios.items()):
+        t_tau.add_row(bucket, "no data yet" if ratio is None else f"{ratio:.3f}")
+    console.print(t_tau)
 
 
 @main.command(name="entity-timeline")
@@ -151,6 +159,166 @@ def export_cmd(ctx: click.Context, out: Path | None) -> None:
     click.echo(
         f"wrote {summary.files_written} files to {out_path} (skipped {summary.files_skipped})"
     )
+
+
+@main.command()
+@click.argument("source_id", type=int)
+@click.option("-k", "top_k", default=5, type=int, help="Max suggestions to show (default 5)")
+@click.pass_context
+def link(ctx: click.Context, source_id: int, top_k: int) -> None:
+    """Suggest related sources for SOURCE_ID via FTS + vector + entity-graph."""
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.reasoning.propose_links import propose_links as _propose
+
+    engine = ctx.obj["engine"]
+    embedder = BgeM3Embedder()
+    result = _propose(engine, source_id=source_id, embedder=embedder, top_k=top_k)
+    if not result.proposals:
+        click.echo("no link candidates")
+        return
+    from sqlalchemy import text
+
+    from brain.db import session_scope
+
+    ids = [p.target_source_id for p in result.proposals]
+    with session_scope(engine) as s:
+        rows = s.execute(
+            text("SELECT id, kind, content FROM sources WHERE id = ANY(:ids)"),
+            {"ids": ids},
+        ).fetchall()
+    by_id = {r[0]: (r[1], r[2]) for r in rows}
+    table = Table("target_id", "kind", "score", "rationale", "head")
+    for p in result.proposals:
+        kind, content = by_id.get(p.target_source_id, ("?", ""))
+        table.add_row(
+            str(p.target_source_id),
+            kind,
+            f"{p.score:.3f}",
+            p.rationale_kind,
+            content[:60],
+        )
+    console.print(table)
+
+
+@main.command()
+@click.argument("title")
+@click.option("--project", default="", help="Project slug for frontmatter")
+@click.pass_context
+def decide(ctx: click.Context, title: str, project: str) -> None:
+    """Capture an ADR-format decision into the brain (kind=decision)."""
+    from datetime import date
+
+    template_path = (
+        Path(__file__).parent.parent.parent
+        / "vault-template"
+        / "templates"
+        / "decision-adr.md"
+    )
+    body = template_path.read_text()
+    body = (
+        body.replace("{{ project }}", project)
+        .replace("{{ date }}", date.today().isoformat())
+        .replace("{{ title }}", title)
+    )
+
+    result = _write(
+        ctx.obj["engine"],
+        SourceInput(
+            kind="decision",
+            content=body,
+            buckets=["semantic"],
+        ),
+    )
+    click.echo(json.dumps(result.model_dump()))
+
+
+@main.command()
+@click.pass_context
+def status(ctx: click.Context) -> None:
+    """Snapshot: active projects, recent captures, recent failures."""
+    from sqlalchemy import text
+
+    from brain.db import session_scope
+
+    engine = ctx.obj["engine"]
+    with session_scope(engine) as s:
+        active_projects = s.execute(
+            text(
+                "SELECT slug, status, updated_at FROM projects WHERE status='active' ORDER BY updated_at DESC LIMIT 20"
+            )
+        ).fetchall()
+        captures_7d = s.execute(
+            text(
+                "SELECT kind, COUNT(*) FROM sources WHERE created_at > NOW() - INTERVAL '7 days' GROUP BY kind ORDER BY 2 DESC"
+            )
+        ).fetchall()
+        recent_failures = s.execute(
+            text(
+                "SELECT target_problem, attempted_approach, retry_count, last_attempted_at FROM failure_memories WHERE t_valid_to IS NULL ORDER BY last_attempted_at DESC LIMIT 5"
+            )
+        ).fetchall()
+
+    t1 = Table("project slug", "status", "updated_at", title="Active projects")
+    for r in active_projects:
+        t1.add_row(str(r[0]), str(r[1]), str(r[2]))
+    console.print(t1)
+
+    t2 = Table("kind", "n (past 7d)", title="Recent captures")
+    for r in captures_7d:
+        t2.add_row(str(r[0]), str(r[1]))
+    console.print(t2)
+
+    t3 = Table(
+        "problem", "approach", "retries", "last attempt", title="Recent failures (top 5)"
+    )
+    for r in recent_failures:
+        t3.add_row(str(r[0])[:50], str(r[1])[:50], str(r[2]), str(r[3]))
+    console.print(t3)
+
+    click.echo("tasks tracking lands Phase 3a")
+
+
+@main.command(name="promote-answer")
+@click.argument("cache_key_hex")
+@click.option("--kind", default="faq", help="Source kind for the promoted row (default: faq)")
+@click.option("--yes", is_flag=True, help="Skip interactive confirmation")
+@click.pass_context
+def promote_answer(ctx: click.Context, cache_key_hex: str, kind: str, yes: bool) -> None:
+    """Promote a cached reasoning output into a new captured source row."""
+    from sqlalchemy import text
+
+    from brain.db import session_scope
+
+    engine = ctx.obj["engine"]
+    try:
+        key = bytes.fromhex(cache_key_hex)
+    except ValueError:
+        click.echo(f"invalid cache key (must be hex): {cache_key_hex}", err=True)
+        ctx.exit(1)
+    with session_scope(engine) as s:
+        row = s.execute(
+            text("SELECT helper_name, output_json FROM reasoning_cache WHERE cache_key = :k"),
+            {"k": key},
+        ).fetchone()
+    if row is None:
+        click.echo(f"no cache row for key {cache_key_hex}", err=True)
+        ctx.exit(1)
+    helper_name, output_json = row
+    body = json.dumps(output_json, indent=2)
+    click.echo(f"helper: {helper_name}")
+    click.echo(body)
+    if not yes and not click.confirm("promote this answer into a new source row?"):
+        click.echo("aborted")
+        return
+    result = _write(
+        engine,
+        SourceInput(
+            kind=kind,  # type: ignore[arg-type]
+            content=body,
+            provenance_kind="synthesized",
+        ),
+    )
+    click.echo(json.dumps(result.model_dump()))
 
 
 @main.command()

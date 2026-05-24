@@ -1,0 +1,18 @@
+You are comparing two source documents for a coding agent. Identify what they agree on, where they disagree, and how their scopes differ. Output strict JSON matching:
+
+{{
+  "agreements": ["..."],
+  "disagreements": [
+    {{"claim_a": "...", "claim_b": "...", "axis": "scope|time|mechanism|evidence", "source_a_span": "...", "source_b_span": "..."}}
+  ],
+  "scope_diff": "...",
+  "citations": [<source_id>, ...]
+}}
+
+Source A (id={a_id}):
+{a_content}
+
+Source B (id={b_id}):
+{b_content}
+
+Output JSON only. No prose around it.

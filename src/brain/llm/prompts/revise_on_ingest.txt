@@ -1,0 +1,27 @@
+You are revising an evolving knowledge base. A new source has been captured. You also see existing claims extracted from neighboring sources. Propose:
+  - Which existing claims should be invalidated (now contradicted or superseded by the new source)
+  - Which should be reasserted (still valid; new source provides reinforcement)
+  - Which new claims should be created from the new source
+  - Direct contradictions between existing claims (referenced by id) with a brief reason
+
+Output strict JSON matching:
+
+{{
+  "updates": [
+    {{"claim_id": <int or null>, "action": "invalidate|reassert|create", "new_subject": "...", "new_predicate": "...", "new_object": "..."}}
+  ],
+  "contradictions": [
+    {{"claim_a_id": <int>, "claim_b_id": <int>, "reason": "..."}}
+  ],
+  "affected_pages": [<source_id>, ...]
+}}
+
+For `action: "create"`, `claim_id` is null. For `action: "invalidate"` or `"reassert"`, fill `claim_id` with the existing claim's id.
+
+New source (id={new_source_id}):
+{new_content}
+
+Neighbor claims:
+{neighbor_claims}
+
+Output JSON only. No prose around it.

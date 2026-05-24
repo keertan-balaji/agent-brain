@@ -1,0 +1,11 @@
+You are summarizing the following sources for a coding agent. Produce a concise (max 500 tokens) synthesis that cites every source you draw from by its integer id. Output strict JSON matching:
+
+{{
+  "summary": "...",
+  "citations": [<source_id>, ...]
+}}
+
+Sources:
+{sources}
+
+Output JSON only. No prose around it.

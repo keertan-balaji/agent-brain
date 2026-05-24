@@ -22,6 +22,10 @@ class HealthReport:
     undercaptured_sessions: list[UndercapturedSession] = field(default_factory=list)
     orphan_classification_count: int = 0
     stale_active_count: int = 0
+    tau_rolling_ratios: dict[str, float | None] = field(default_factory=dict)
+
+
+_BUCKETS = ("semantic", "episodic", "procedural", "failure")
 
 
 _TRACKED_TABLES = (
@@ -88,5 +92,30 @@ def audit(engine: Engine, *, undercapture_threshold: int = 3) -> HealthReport:
             )
         ).scalar()
         report.stale_active_count = int(stale or 0)
+
+        for bucket in _BUCKETS:
+            ratio = s.execute(
+                text(
+                    """
+                    SELECT AVG(
+                        cardinality(selected)::float
+                        / NULLIF(jsonb_array_length(candidates), 0)
+                    )
+                    FROM (
+                        SELECT selected, candidates
+                        FROM retrieval_log
+                        WHERE filters -> 'buckets' ? :bucket
+                          AND selected IS NOT NULL
+                          AND candidates IS NOT NULL
+                        ORDER BY occurred_at DESC
+                        LIMIT 100
+                    ) recent
+                    """
+                ),
+                {"bucket": bucket},
+            ).scalar()
+            report.tau_rolling_ratios[bucket] = (
+                float(ratio) if ratio is not None else None
+            )
 
     return report

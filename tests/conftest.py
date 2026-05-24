@@ -6,6 +6,20 @@ import subprocess
 import pytest
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--api",
+        action="store_true",
+        default=False,
+        help="Run tests that hit real Anthropic API (requires BRAIN_ANTHROPIC_API_KEY env var).",
+    )
+
+
+@pytest.fixture
+def use_real_api(request) -> bool:
+    return request.config.getoption("--api")
+
+
 @pytest.fixture(scope="session")
 def pg_url() -> str:
     url = os.environ.get(
@@ -48,9 +62,26 @@ def _truncate_tables(pg_url: str) -> None:
                     failure_memories,
                     memory_classifications, source_projects, sources_fts,
                     sources,
-                    subtasks, sessions, projects
+                    subtasks, sessions, projects,
+                    reasoning_cache
                 RESTART IDENTITY CASCADE
                 """
             )
         )
     engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def bge_m3_embedder():
+    """Session-scoped BGE-M3 dense embedder. Loads model once (~5s after first download)."""
+    from brain.embed.bge_m3 import BgeM3Embedder
+
+    return BgeM3Embedder()
+
+
+@pytest.fixture(scope="session")
+def mxbai_reranker():
+    """Session-scoped mxbai cross-encoder. First use downloads weights (~1GB)."""
+    from brain.retrieval.rerank import MxbaiReranker
+
+    return MxbaiReranker()

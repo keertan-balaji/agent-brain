@@ -114,6 +114,14 @@ def health(ctx: click.Context, threshold: int) -> None:
         console.print(
             f"[yellow]stale active-status sources (>90d): {report.stale_active_count}[/]"
         )
+    t_tau = Table(
+        "bucket",
+        "tau-rolling ratio",
+        title="Recent selected/candidates ratio (past 100 queries)",
+    )
+    for bucket, ratio in sorted(report.tau_rolling_ratios.items()):
+        t_tau.add_row(bucket, "no data yet" if ratio is None else f"{ratio:.3f}")
+    console.print(t_tau)
 
 
 @main.command(name="entity-timeline")

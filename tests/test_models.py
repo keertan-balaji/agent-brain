@@ -3,6 +3,7 @@
 from sqlalchemy import text
 
 from brain.db import get_engine, session_scope
+from brain.models import Project, Session as BrainSession, Source, Subtask  # noqa: F401  (BrainSession/Subtask re-exported for parity with plan)
 
 
 def test_projects_round_trip(pg_url: str) -> None:
@@ -321,3 +322,29 @@ def test_session_resume_bundles_active_unique(pg_url: str) -> None:
     except Exception as exc:
         raised = "unique" in str(exc).lower() or "duplicate" in str(exc).lower()
     assert raised, "second active bundle for same project must violate partial unique index"
+
+
+def test_orm_round_trip_project_and_source(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        p = Project(slug="orm-test", task_type="development", status="active")
+        s.add(p)
+        s.flush()
+        src = Source(
+            kind="note",
+            content="orm hello",
+            content_hash=__import__("hashlib").sha256(b"orm hello").digest(),
+            project_id=p.id,
+        )
+        s.add(src)
+        s.flush()
+        pid = p.id
+        sid = src.id
+    with session_scope(engine) as s:
+        loaded = s.get(Source, sid)
+    assert loaded is not None
+    assert loaded.kind == "note"
+    assert loaded.project_id == pid
+    assert loaded.provenance_kind == "captured"
+    assert loaded.generation_depth == 0
+    assert loaded.status == "active"

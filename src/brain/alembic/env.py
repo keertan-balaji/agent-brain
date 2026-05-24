@@ -20,8 +20,9 @@ config.set_main_option(
     ),
 )
 
-# Models import is added in Task 10 once models.py exists.
-target_metadata = None
+from brain.models import Base
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

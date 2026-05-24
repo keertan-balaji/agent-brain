@@ -54,3 +54,11 @@ def _truncate_tables(pg_url: str) -> None:
             )
         )
     engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def bge_m3_embedder():
+    """Session-scoped BGE-M3 dense embedder. Loads model once (~5s after first download)."""
+    from brain.embed.bge_m3 import BgeM3Embedder
+
+    return BgeM3Embedder()

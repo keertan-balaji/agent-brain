@@ -27,16 +27,9 @@ def test_upgrade_head_creates_brain_config(pg_url: str) -> None:
 
 
 def test_downgrade_base_drops_brain_config(pg_url: str) -> None:
-    subprocess.run(
-        ["alembic", "upgrade", "head"],
-        check=True,
-        env={"BRAIN_DB_URL": pg_url, "PATH": __import__("os").environ["PATH"]},
-    )
-    subprocess.run(
-        ["alembic", "downgrade", "base"],
-        check=True,
-        env={"BRAIN_DB_URL": pg_url, "PATH": __import__("os").environ["PATH"]},
-    )
+    env = {"BRAIN_DB_URL": pg_url, "PATH": __import__("os").environ["PATH"]}
+    subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)
+    subprocess.run(["alembic", "downgrade", "base"], check=True, env=env)
     engine = get_engine(pg_url)
     with engine.connect() as conn:
         existing = conn.execute(
@@ -48,3 +41,6 @@ def test_downgrade_base_drops_brain_config(pg_url: str) -> None:
     table_names = {r[0] for r in existing}
     assert "brain_config" not in table_names
     assert "alembic_version" in table_names  # alembic's own tracking table is kept
+    # Restore head so subsequent tests (which rely on the session-scoped fixture
+    # having applied migrations) still see a populated schema.
+    subprocess.run(["alembic", "upgrade", "head"], check=True, env=env)

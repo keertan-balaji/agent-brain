@@ -1072,6 +1072,13 @@ Agent-Brain/
 
 Markdown frontmatter includes `db_id: <source_id>` so an Obsidian-side edit can be matched back to the canonical row. A file-watcher reads edits and updates the DB; on conflict (DB updated since render), warn.
 
+**Phase 1 limitation (lifted in Phase 3a):** The export is currently *forward-only* —
+re-ingesting the exported markdown via `brain reingest` creates new rows rather than
+matching back to the original source (because Phase 1 sources written via `brain.write`
+have `uri=NULL` and the exported files have new `file://` URIs). The `db_id` frontmatter
+is preserved on export but not yet honored on re-ingest. Phase 3a adds db_id-based
+re-ingest, completing the lossless round-trip.
+
 ## Interfaces
 
 ### Skills (Anthropic Skills format)

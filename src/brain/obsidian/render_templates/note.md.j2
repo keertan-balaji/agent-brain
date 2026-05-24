@@ -1,0 +1,12 @@
+---
+db_id: {{ source.id }}
+type: note
+kind: {{ source.kind }}
+project: {{ project_slug | default('null') }}
+status: {{ source.status }}
+created: {{ source.created_at.date().isoformat() }}
+updated: {{ source.updated_at.date().isoformat() }}
+provenance_kind: {{ source.provenance_kind }}
+buckets: {{ buckets | tojson }}
+---
+{{ source.content }}

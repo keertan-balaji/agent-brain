@@ -31,7 +31,8 @@ Body of the decision.
     )
     engine = get_engine(pg_url)
     summary = migrate_v1_markdown(engine, vault)
-    assert summary.files_imported == 1
+    assert summary.files_processed == 1
+    assert summary.files_created == 1
     with session_scope(engine) as s:
         # Scope by uri to isolate from any decision rows written by other tests
         # (the DB persists across tests within a session; only migrations reset).
@@ -67,6 +68,8 @@ Body.
     engine = get_engine(pg_url)
     first = migrate_v1_markdown(engine, vault)
     second = migrate_v1_markdown(engine, vault)
-    assert first.files_imported == 1
-    assert second.files_imported == 1
+    assert first.files_processed == 1
+    assert first.files_created == 1
+    assert second.files_processed == 1
+    assert second.files_created == 0  # second run hits dedup, no new rows
     assert second.dedup_hits == 1  # second run sees the existing row

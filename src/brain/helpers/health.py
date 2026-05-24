@@ -59,7 +59,7 @@ def audit(engine: Engine, *, undercapture_threshold: int = 3) -> HealthReport:
                 LEFT JOIN events ev ON ev.session_id = sess.id
                 WHERE sess.ended_at IS NOT NULL
                 GROUP BY sess.id, sess.project_id
-                HAVING COUNT(ev.id) < :thresh
+                HAVING COUNT(ev.id) > 0 AND COUNT(ev.id) < :thresh
                 ORDER BY sess.ended_at DESC
                 """
             ),

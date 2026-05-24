@@ -160,7 +160,8 @@ def reingest(ctx: click.Context, vault_path: Path) -> None:
     """Re-ingest markdown from a vault path (Phase 1: equivalent to v1 migration)."""
     summary = migrate_v1_markdown(ctx.obj["engine"], vault_path)
     click.echo(
-        f"imported {summary.files_imported} files (dedup hits: {summary.dedup_hits}, "
+        f"processed {summary.files_processed} files "
+        f"(created {summary.files_created}, dedup hits {summary.dedup_hits}, "
         f"skipped unknown type: {len(summary.skipped_unknown_type)})"
     )
 

@@ -29,10 +29,15 @@ def entity_timeline(
 ) -> list[TimelineItem]:
     """Return chronological timeline of activity referencing the given entity.
 
-    Walks three sources:
-      - events.source_id pointing at sources referenced by the entity
-      - failure_memories whose source_id matches
-      - sources directly authored about the entity (via entities.source_id)
+    Walks three sources and UNIONs them:
+      - events.source_id pointing at sources referenced by the entity (role='event')
+      - failure_memories whose source_id matches (role='failure')
+      - sources directly authored about the entity (role='source')
+        — INCLUDES the entity's own seed source row (entities.source_id).
+          A timeline for a brand-new entity will therefore have at least 1 item
+          (its seed source) even with zero events/failures.
+
+    Filter by date range with from_ts/to_ts (both optional, applied to each arm).
     """
     sql = """
         WITH entity_sources AS (

@@ -30,7 +30,13 @@ def test_audit_lists_undercaptured_sessions(pg_url: str) -> None:
             ),
             {"p": pid},
         ).scalar()
-        # Zero events on a closed session — definitely under-captured.
+        # Add 1 event (below threshold=3, above 0) so the under-captured check fires.
+        # Zero-event sessions are the Phase 1 baseline (no hook capture) and would
+        # otherwise flood the audit; the query now requires > 0 events.
+        s.execute(
+            text("INSERT INTO events(session_id, ordinal, kind) VALUES (:s, 1, 'reflection')"),
+            {"s": sess_id},
+        )
     report = audit(engine, undercapture_threshold=3)
     assert sess_id in [row.session_id for row in report.undercaptured_sessions]
 

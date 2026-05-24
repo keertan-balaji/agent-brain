@@ -80,4 +80,4 @@ def test_capture_recall_export_reingest_roundtrip(tmp_path: Path, pg_url: str) -
     # Verify that all 3 exported decision/gotcha/pattern files were imported as new rows.
     # (Phase 1 export does not preserve the original URI; Phase 3a will add db_id-based dedup.)
     summary2 = migrate_v1_markdown(engine, out)
-    assert summary2.files_imported == 3
+    assert summary2.files_processed == 3

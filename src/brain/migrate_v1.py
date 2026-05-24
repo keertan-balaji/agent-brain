@@ -34,7 +34,8 @@ _TYPE_TO_KIND: dict[str, SourceKind] = {
 
 @dataclass
 class MigrationSummary:
-    files_imported: int = 0
+    files_processed: int = 0  # renamed from files_imported (honest: includes dedup hits)
+    files_created: int = 0    # NEW: rows actually written (excludes dedup hits)
     dedup_hits: int = 0
     skipped_unknown_type: list[Path] = None  # type: ignore[assignment]
 
@@ -66,9 +67,9 @@ def migrate_v1_markdown(engine: Engine, vault_path: Path) -> MigrationSummary:
                 classifier="v1-migration",
             ),
         )
+        summary.files_processed += 1
         if result.created:
-            summary.files_imported += 1
+            summary.files_created += 1
         else:
             summary.dedup_hits += 1
-            summary.files_imported += 1  # count as imported for re-run idempotency
     return summary

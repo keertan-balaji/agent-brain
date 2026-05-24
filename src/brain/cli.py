@@ -193,6 +193,38 @@ def link(ctx: click.Context, source_id: int, top_k: int) -> None:
 
 
 @main.command()
+@click.argument("title")
+@click.option("--project", default="", help="Project slug for frontmatter")
+@click.pass_context
+def decide(ctx: click.Context, title: str, project: str) -> None:
+    """Capture an ADR-format decision into the brain (kind=decision)."""
+    from datetime import date
+
+    template_path = (
+        Path(__file__).parent.parent.parent
+        / "vault-template"
+        / "templates"
+        / "decision-adr.md"
+    )
+    body = template_path.read_text()
+    body = (
+        body.replace("{{ project }}", project)
+        .replace("{{ date }}", date.today().isoformat())
+        .replace("{{ title }}", title)
+    )
+
+    result = _write(
+        ctx.obj["engine"],
+        SourceInput(
+            kind="decision",
+            content=body,
+            buckets=["semantic"],
+        ),
+    )
+    click.echo(json.dumps(result.model_dump()))
+
+
+@main.command()
 @click.argument("vault_path", type=click.Path(exists=True, path_type=Path))
 @click.pass_context
 def reingest(ctx: click.Context, vault_path: Path) -> None:

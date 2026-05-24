@@ -76,3 +76,11 @@ def bge_m3_embedder():
     from brain.embed.bge_m3 import BgeM3Embedder
 
     return BgeM3Embedder()
+
+
+@pytest.fixture(scope="session")
+def mxbai_reranker():
+    """Session-scoped mxbai cross-encoder. First use downloads weights (~1GB)."""
+    from brain.retrieval.rerank import MxbaiReranker
+
+    return MxbaiReranker()

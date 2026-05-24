@@ -4,12 +4,15 @@ Phase 1 (FTS-only) behavior is preserved: callers that don't pass embedder get
 identical results. When embedder is provided, runs both FTS and pgvector kNN,
 maps chunk hits to parent source ids, fuses by RRF, hydrates top-k.
 
-Cross-encoder rerank and per-bucket tau/abstain are added in Tasks 10 and 11.
+When a reranker is provided, the fused list (up to rerank_candidate_pool)
+is rehydrated and rescored by the cross-encoder; the top-k of those scores
+becomes the final order. Per-bucket tau/abstain is added in Task 11.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Engine, text
 
@@ -19,6 +22,9 @@ from brain.retrieval.fts import fts_search
 from brain.retrieval.rrf import rrf_fuse
 from brain.retrieval.vector import knn_search
 from brain.schemas import Bucket
+
+if TYPE_CHECKING:
+    from brain.retrieval.rerank import MxbaiReranker
 
 
 @dataclass(frozen=True)
@@ -61,8 +67,11 @@ def recall(
     kinds: list[str] | None = None,
     include_archived: bool = False,
     embedder: BgeM3Embedder | None = None,
+    reranker: "MxbaiReranker | None" = None,
+    rerank_candidate_pool: int = 50,
 ) -> list[RecallHit]:
-    """Hybrid retrieval. embedder=None -> FTS-only (Phase 1 behavior)."""
+    """Hybrid retrieval. embedder=None -> FTS-only (Phase 1 behavior).
+    reranker=None -> RRF fused order; reranker set -> cross-encoder finalizes."""
     over_k = max(100, k * 10)
     fts_hits = fts_search(
         engine,
@@ -82,5 +91,14 @@ def recall(
     vec_hits = knn_search(engine, query_text=query, embedder=embedder, k=over_k)
     vec_ids = [h.parent_source_id for h in vec_hits]
 
-    fused = rrf_fuse([fts_ids, vec_ids])[:k]
-    return _hydrate(engine, fused)
+    fused = rrf_fuse([fts_ids, vec_ids])
+
+    if reranker is None:
+        return _hydrate(engine, fused[:k])
+
+    pool = fused[:rerank_candidate_pool]
+    hydrated_pool = _hydrate(engine, pool)
+    cands = [(h.id, h.content) for h in hydrated_pool]
+    reranked = reranker.rerank(query, cands, top_k=k)
+    scored = [(h.doc_id, h.score) for h in reranked]
+    return _hydrate(engine, scored)

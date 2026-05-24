@@ -7,10 +7,17 @@ maps chunk hits to parent source ids, fuses by RRF, hydrates top-k.
 When a reranker is provided, the fused list (up to rerank_candidate_pool)
 is rehydrated and rescored by the cross-encoder; the top-k of those scores
 becomes the final order. Per-bucket tau/abstain is added in Task 11.
+
+Every recall() call writes a row to retrieval_log with the query, filters,
+top-K candidates (per-stage scores), abstain flag, top1 score, provenance
+ratios, and the agent identity (from BRAIN_AGENT env). session_id is NULL
+until Phase 3a session hooks land.
 """
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -86,6 +93,43 @@ def _tau_or_abstain(
     return scored
 
 
+def _log_recall(
+    engine: Engine,
+    *,
+    query: str,
+    filters: dict,
+    candidates: list[dict],
+    abstained: bool,
+    top1_score: float | None,
+    synthesized_ratio: float | None,
+    captured_ratio: float | None,
+) -> None:
+    with session_scope(engine) as s:
+        s.execute(
+            text(
+                """
+                INSERT INTO retrieval_log(
+                    query, filters, candidates, abstained,
+                    top1_score, synthesized_ratio, captured_ratio, agent
+                ) VALUES (
+                    :q, CAST(:f AS jsonb), CAST(:c AS jsonb), :a,
+                    :t, :sr, :cr, :ag
+                )
+                """
+            ),
+            {
+                "q": query,
+                "f": json.dumps(filters),
+                "c": json.dumps(candidates),
+                "a": abstained,
+                "t": top1_score,
+                "sr": synthesized_ratio,
+                "cr": captured_ratio,
+                "ag": os.environ.get("BRAIN_AGENT"),
+            },
+        )
+
+
 def recall(
     engine: Engine,
     query: str,
@@ -107,6 +151,8 @@ def recall(
     conservative default). FTS-only branch only enforces tau when caller
     sets it explicitly (ts_rank scores are unbounded and small, so the
     calibrated defaults would always abstain on Phase 1 results).
+
+    Always writes a row to retrieval_log (see _log_recall).
     """
     over_k = max(100, k * 10)
     fts_hits = fts_search(
@@ -120,12 +166,31 @@ def recall(
     )
     fts_ids = [h.source_id for h in fts_hits]
 
+    filters = {
+        "project_id": project_id,
+        "buckets": buckets,
+        "kinds": kinds,
+        "include_archived": include_archived,
+    }
+
     if embedder is None:
-        scored = [(h.source_id, h.score) for h in fts_hits[:k]]
-        # FTS-only path: tau abstain only applied if caller explicitly set tau
-        if tau is None:
-            return _hydrate(engine, scored)
-        return _hydrate(engine, _tau_or_abstain(scored, buckets=buckets, tau=tau))
+        pre_tau = [(h.source_id, h.score) for h in fts_hits[:k]]
+        # FTS-only path: only apply tau when caller explicitly set it
+        post_tau = pre_tau if tau is None else _tau_or_abstain(pre_tau, buckets=buckets, tau=tau)
+        hits = _hydrate(engine, post_tau)
+        # abstained iff tau filtering emptied a non-empty list
+        abstained = bool(pre_tau) and not post_tau
+        _log_recall(
+            engine,
+            query=query,
+            filters=filters,
+            candidates=[{"id": d, "score": s, "stage": "fts"} for d, s in pre_tau],
+            abstained=abstained,
+            top1_score=(pre_tau[0][1] if pre_tau else None),
+            synthesized_ratio=None,
+            captured_ratio=None,
+        )
+        return hits
 
     vec_hits = knn_search(engine, query_text=query, embedder=embedder, k=over_k)
     vec_ids = [h.parent_source_id for h in vec_hits]
@@ -150,10 +215,42 @@ def recall(
     )
 
     if reranker is None:
-        return _hydrate(engine, _tau_or_abstain(fused[:k], buckets=buckets, tau=tau))
+        pre_tau = fused[:k]
+        candidate_records = [{"id": d, "score": s, "stage": "rrf"} for d, s in pre_tau]
+    else:
+        hydrated_pool = _hydrate(engine, fused)
+        cands = [(h.id, h.content) for h in hydrated_pool]
+        reranked = reranker.rerank(query, cands, top_k=k)
+        pre_tau = [(h.doc_id, h.score) for h in reranked]
+        candidate_records = [{"id": d, "score": s, "stage": "rerank"} for d, s in pre_tau]
 
-    hydrated_pool = _hydrate(engine, fused)
-    cands = [(h.id, h.content) for h in hydrated_pool]
-    reranked = reranker.rerank(query, cands, top_k=k)
-    scored = [(h.doc_id, h.score) for h in reranked]
-    return _hydrate(engine, _tau_or_abstain(scored, buckets=buckets, tau=tau))
+    post_tau = _tau_or_abstain(pre_tau, buckets=buckets, tau=tau)
+    hits = _hydrate(engine, post_tau)
+
+    # Compute provenance ratios over the actual hits (use already-loaded prov when possible).
+    if hits:
+        hit_ids = [h.id for h in hits]
+        missing = [i for i in hit_ids if i not in prov]
+        if missing:
+            prov.update(_load_provenance(engine, missing))
+        synth_n = sum(
+            1 for i in hit_ids if prov.get(i, ("captured", 0))[0] == "synthesized"
+        )
+        synth_ratio = synth_n / len(hit_ids)
+        cap_ratio = 1.0 - synth_ratio
+    else:
+        synth_ratio = None
+        cap_ratio = None
+
+    _log_recall(
+        engine,
+        query=query,
+        filters=filters,
+        candidates=candidate_records,
+        abstained=(len(post_tau) == 0),
+        top1_score=(pre_tau[0][1] if pre_tau else None),
+        synthesized_ratio=synth_ratio,
+        captured_ratio=cap_ratio,
+    )
+
+    return hits

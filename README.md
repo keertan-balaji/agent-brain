@@ -162,15 +162,16 @@ Embeddings, RRF, reranker, hooks, MCP — all later phases. See `docs/superpower
 
 ## Agent Brain v2 — Phase 2
 
-Phase 2 ships hybrid retrieval, parent-document chunking, Contextual Retrieval, provenance-aware ranking, 5 Fast-tier reasoning helpers, 4 new skills, and a tau-rolling-ratio health report.
+> **Superseded by Phase 2.5 (below).** The embedded-Haiku flow described in this section was deleted: `BRAIN_ANTHROPIC_API_KEY` is no longer read, and `anthropic` is no longer a dependency. The retrieval pipeline (BGE-M3 + RRF + mxbai rerank + provenance defenses) is unchanged. Follow the Phase 2.5 quick-start below.
 
-Quick start (assumes Phase 1 already set up):
+Phase 2 originally shipped hybrid retrieval, parent-document chunking, Contextual Retrieval (Haiku), provenance-aware ranking, 5 Fast-tier reasoning helpers, 4 new skills, and a tau-rolling-ratio health report.
+
+Historical quick-start (DO NOT use on a fresh install — Phase 2.5 is current):
 
 ```bash
+# Historical only — anthropic dep removed in Phase 2.5
 export BRAIN_ANTHROPIC_API_KEY=sk-ant-...
-# Re-install deps to pull fastembed, sentence-transformers, anthropic, etc.
 uv pip install -e ".[dev]"
-# Models download on first use (~3GB total: BGE-M3 + mxbai-rerank)
 brain --help
 ```
 

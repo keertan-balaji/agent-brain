@@ -403,11 +403,8 @@ class ReasoningCache(Base):
     cache_key: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
     helper_name: Mapped[str] = mapped_column(Text, nullable=False)
     input_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    llm_model_id: Mapped[str] = mapped_column(Text, nullable=False)
-    llm_model_ver: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_ver: Mapped[str] = mapped_column(Text, nullable=False)
     output_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    tokens_used: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

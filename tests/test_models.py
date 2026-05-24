@@ -245,3 +245,38 @@ def test_procedures_partial_unique_active(pg_url: str) -> None:
     except Exception as exc:
         raised = "unique" in str(exc).lower() or "duplicate" in str(exc).lower()
     assert raised, "second active step for same situation must violate partial unique index"
+
+
+def test_entities_and_edges(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    with session_scope(engine) as s:
+        sid = s.execute(
+            text(
+                "INSERT INTO sources(kind, content, content_hash) "
+                "VALUES ('paper','x',sha256('paperx'::bytea)) RETURNING id"
+            )
+        ).scalar()
+        a = s.execute(
+            text(
+                "INSERT INTO entities(kind, canonical_name, source_id) "
+                "VALUES ('person','Alice',:s) RETURNING id"
+            ),
+            {"s": sid},
+        ).scalar()
+        b = s.execute(
+            text(
+                "INSERT INTO entities(kind, canonical_name, source_id) "
+                "VALUES ('person','Bob',:s) RETURNING id"
+            ),
+            {"s": sid},
+        ).scalar()
+        s.execute(
+            text(
+                "INSERT INTO edges(src_id, dst_id, relation, source_id) "
+                "VALUES (:a, :b, 'cites', :s)"
+            ),
+            {"a": a, "b": b, "s": sid},
+        )
+    with session_scope(engine) as s:
+        rel = s.execute(text("SELECT relation FROM edges")).scalar()
+    assert rel == "cites"

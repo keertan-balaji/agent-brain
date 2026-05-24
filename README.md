@@ -144,6 +144,22 @@ docs/superpowers/                # spec + plan
 tests/                           # 9 test files, run-all.sh harness
 ```
 
+## Agent Brain v2 — Phase 1
+
+Phase 1 ships: Postgres-backed schema, Python core (`brain.write` / `brain.read`), FTS retrieval, 3 skills (`brain-setup`, `brain-recall`, `brain-health`), v1 markdown migration, Obsidian export.
+
+Quick start:
+
+```bash
+uv venv && source .venv/bin/activate && uv pip install -e ".[dev]"
+bash skills/brain-setup/scripts/setup.sh
+brain --help
+```
+
+Full install + operations: `docs/installation.md`, `docs/operations.md`.
+
+Embeddings, RRF, reranker, hooks, MCP — all later phases. See `docs/superpowers/specs/2026-05-23-agent-brain-v2-design.md`.
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-05-17-obsidian-second-brain-skill-pack-design.md`

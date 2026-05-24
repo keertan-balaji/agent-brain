@@ -1,6 +1,6 @@
 {
-  "name": "obsidian-second-brain",
-  "description": "Turns an Obsidian vault into a persistent, organized second brain for coding agents. Filesystem-direct, no MCP. Five skills: setup, project-bootstrap (mandatory), map-repo, recall, capture.",
+  "name": "agent-brain",
+  "description": "Persistent cognition store for AI coding agents — Phase 1 ships Postgres + FTS + 3 skills (v1 obsidian-* skills retained alongside).",
   "version": "0.2.0",
   "author": {
     "name": "keertan",
@@ -18,5 +18,15 @@
     "vault",
     "recall",
     "capture"
+  ],
+  "skills": [
+    "skills/brain-setup",
+    "skills/brain-recall",
+    "skills/brain-health",
+    "skills/obsidian-setup",
+    "skills/obsidian-project-bootstrap",
+    "skills/obsidian-map-repo",
+    "skills/obsidian-recall",
+    "skills/obsidian-capture"
   ]
 }

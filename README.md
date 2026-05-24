@@ -160,6 +160,33 @@ Full install + operations: `docs/installation.md`, `docs/operations.md`.
 
 Embeddings, RRF, reranker, hooks, MCP — all later phases. See `docs/superpowers/specs/2026-05-23-agent-brain-v2-design.md`.
 
+## Agent Brain v2 — Phase 2
+
+Phase 2 ships hybrid retrieval, parent-document chunking, Contextual Retrieval, provenance-aware ranking, 5 Fast-tier reasoning helpers, 4 new skills, and a tau-rolling-ratio health report.
+
+Quick start (assumes Phase 1 already set up):
+
+```bash
+export BRAIN_ANTHROPIC_API_KEY=sk-ant-...
+# Re-install deps to pull fastembed, sentence-transformers, anthropic, etc.
+uv pip install -e ".[dev]"
+# Models download on first use (~3GB total: BGE-M3 + mxbai-rerank)
+brain --help
+```
+
+New skills:
+
+| Skill | When to use |
+|---|---|
+| `brain-link` | After capturing a new source — surfaces related sources for wikilinking |
+| `brain-decide` | Capture an ADR-formatted decision instead of a free-form note |
+| `brain-status` | Session-start orientation: active projects + recent captures + recent failures |
+| `brain-promote-answer` | Save a good reasoning-helper output as a durable source |
+
+Operations + setup: `docs/phase2.md`. Spec: `docs/superpowers/specs/2026-05-23-agent-brain-v2-design.md`.
+
+Phase 3 (hooks, compaction survival, multi-query fusion, sparse/ColBERT legs) — see spec.
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-05-17-obsidian-second-brain-skill-pack-design.md`

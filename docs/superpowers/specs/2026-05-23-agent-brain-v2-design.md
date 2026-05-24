@@ -105,8 +105,8 @@ CREATE TABLE sources (
   kind            TEXT NOT NULL,        -- 'tool_call' | 'command' | 'edit' | 'decision' |
                                         -- 'note' | 'paper' | 'code_file' | 'web_page' | …
   uri             TEXT,                 -- e.g. file://… or https://… or tool://Bash/123
-  content         TEXT NOT NULL,        -- the actual text — never truncated, never lossy
-  content_hash    BYTEA NOT NULL,       -- sha256 of content for dedup lookups (not unique — see re-assertion)
+  content         TEXT NOT NULL,        -- the actual text. Lossless contract differs by kind — see §Content fidelity rule below.
+  content_hash    BYTEA NOT NULL,       -- sha256 of content for scoped dedup (NOT a global identity — see scope rule)
   mime            TEXT,                 -- 'text/plain', 'text/markdown', 'application/x-python', …
   tokens          INT,                  -- approximate token count
   lang            TEXT,                 -- language code if applicable
@@ -121,6 +121,14 @@ CREATE TABLE sources (
   parent_id       BIGINT REFERENCES sources(id), -- for chunks of a larger document
   span_start      INT,                  -- char offset in parent
   span_end        INT,
+  -- Primary project this source belongs to. NULL = global/cross-project knowledge.
+  -- For cross-project sources (a paper relevant to N projects), use source_projects M2M (below).
+  project_id      BIGINT REFERENCES projects(id),
+  -- Source-level status, distinct from bi-temporal validity. 'active' is the default;
+  -- 'archived' soft-hides from default retrieval without invalidating the row.
+  -- Bi-temporal validity (t_valid_*) is for fact-revision; status is for visibility.
+  status          TEXT NOT NULL DEFAULT 'active'
+                  CHECK (status IN ('active','archived','draft')),
   -- Provenance discipline: distinguish observed/captured content from synthesized content.
   -- This is load-bearing for brain-rot prevention — synthesized content is down-weighted at
   -- retrieval to prevent the recursive-training drift documented in Oct-2025 LLM brain rot work.
@@ -138,11 +146,25 @@ CREATE TABLE sources (
   flags           JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 CREATE INDEX sources_kind_idx ON sources(kind);
+CREATE INDEX sources_project_idx ON sources(project_id) WHERE project_id IS NOT NULL;
+CREATE INDEX sources_status_idx ON sources(status);
+
+-- Many-to-many for sources that legitimately belong to multiple projects (a shared paper,
+-- a cross-cutting decision). Most sources don't need this; sources.project_id covers the
+-- primary association. source_projects is queried by the retrieval pre-filter via UNION.
+CREATE TABLE source_projects (
+  source_id   BIGINT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  project_id  BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  PRIMARY KEY (source_id, project_id)
+);
 CREATE INDEX sources_validity_idx ON sources(t_valid_from, t_valid_to);
 CREATE INDEX sources_provenance_idx ON sources(provenance_kind);
--- Partial unique: only one CURRENTLY-VALID row per content hash. Invalidated rows free the slot.
-CREATE UNIQUE INDEX sources_hash_active_idx ON sources(content_hash) WHERE t_valid_to IS NULL;
--- Non-unique hash index for dedup lookups across the whole history.
+-- Scoped dedup: only one CURRENTLY-VALID row per (kind, uri, content_hash) — preserves
+-- distinct observations that happen to share text (two commands with identical output in
+-- different sessions; same note body in two projects). NULL uri tied per-kind.
+CREATE UNIQUE INDEX sources_scoped_active_idx
+  ON sources (kind, COALESCE(uri,''), content_hash) WHERE t_valid_to IS NULL;
+-- Non-unique hash index for cross-history lookups.
 CREATE INDEX sources_hash_lookup_idx ON sources(content_hash);
 
 -- Auto-update updated_at on row mutation.
@@ -153,13 +175,25 @@ CREATE TRIGGER sources_touch BEFORE UPDATE ON sources
   FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 ```
 
+**Content fidelity rule** (per-kind, resolves the lossless-vs-truncation ambiguity):
+
+| Kind | Fidelity | Storage |
+|---|---|---|
+| `decision`, `note`, `gotcha`, `pattern`, `paper`, `web_page`, `code_file`, `chunk_context`, `faq`, `session_summary`, `subtask_summary` | **Lossless** — `content` is byte-identical to the source | inline `sources.content` |
+| `command` (the invoked command string itself) | Lossless | inline |
+| `tool_call_output` (Bash stdout/stderr, Read file contents at-time-of-read) | **Lossy by policy** — head + tail + error-span only (per §Capture Path 2). Full output is NOT stored, by design. | inline `sources.content` holds the truncated representation; `sources.flags = {'truncation': {'head_bytes': X, 'tail_bytes': Y, 'middle_elided': Z}}` records what was dropped |
+| `image`, `binary_artifact` (Phase 4+) | Reference-only | `sources.content` holds a textual descriptor; the artifact lives in `artifacts.blob_path` (filesystem path) |
+
+The "lossless source of truth" claim earlier in the spec applies to every kind **except `tool_call_output` and large `web_page` ingests** (which may be size-capped). Tool-output truncation is policy, not accident: full stdout for a long-running test run is unbounded and would dominate DB growth. The error-span preservation policy (§Capture Path 2) is the explicit fidelity bound.
+
 **Re-assertion semantics** (the bi-temporal pattern in plain English):
 
 - Inserting content whose `content_hash` already exists in a currently-valid row is a no-op (return the existing `id`).
 - Editing existing content: the old row is invalidated (`t_valid_to = NOW()`, `invalidation_reason` set), a new row inserted with the new content. Downstream pointers (events, classifications) continue to reference the old `id` — historical correctness preserved.
 - Re-asserting previously-invalidated content (same hash, now valid again): a new row is inserted; old invalidated row stays as history. The partial unique index permits this because only the new row has `t_valid_to IS NULL`.
-- This is enforced by the application-layer `brain.write()` API; the spec commits to a `find_active_by_hash → return_id_or_insert` flow rather than relying on database constraints alone.
+- This is enforced by the application-layer `brain.write()` API; the spec commits to a `find_active_by_hash_and_kind_and_uri → return_id_or_insert` flow rather than relying on database constraints alone (see scope rule below).
 
+```sql
 -- Full-text index, generated from content.
 CREATE TABLE sources_fts (
   source_id  BIGINT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
@@ -332,6 +366,7 @@ CREATE TABLE failure_memories (
   project_id         BIGINT REFERENCES projects(id),
   t_valid_from       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   t_valid_to         TIMESTAMPTZ,
+  invalidation_reason TEXT,                    -- e.g. 'superseded by success at event N'
   -- Deduplication key: a re-attempt of the same approach for the same problem
   -- finds the existing row and bumps retry_count rather than creating a new row.
   UNIQUE (target_problem, attempted_approach)
@@ -417,8 +452,12 @@ CREATE TABLE session_resume_bundles (
   manifest      JSONB NOT NULL,                    -- structured: see below
   rendered      TEXT NOT NULL                      -- ready-to-paste markdown brief
 );
-CREATE INDEX bundles_project_active_idx ON session_resume_bundles(project_id, generated_at DESC)
+-- Partial UNIQUE enforces "one active bundle per project" (the spec's stated invariant).
+-- The trigger that creates a new bundle sets superseded_at on any prior active row in the
+-- same transaction.
+CREATE UNIQUE INDEX bundles_project_active_unique_idx ON session_resume_bundles(project_id)
   WHERE superseded_at IS NULL;
+CREATE INDEX bundles_project_idx ON session_resume_bundles(project_id, generated_at DESC);
 ```
 
 **Manifest schema:**
@@ -459,8 +498,8 @@ If a category exceeds its allocation, items are dropped in reverse selection ord
 
 **Lifecycle:**
 
-- `PreCompact` hook (Claude Code) generates a bundle with `trigger='pre_compact'`. The bundle is rendered into the agent's next message via the hook's stdout, AND persisted for later inspection.
-- `Stop` hook generates a `trigger='session_end'` bundle; this is what `SessionStart` consumes next session.
+- `PreCompact` hook (Claude Code) generates a bundle with `trigger='pre_compact'` and **persists it** to `session_resume_bundles`. PreCompact's stdout is NOT a documented context-injection channel; rendering the bundle into the agent's next message happens via the `SessionStart` hook's `hookSpecificOutput.additionalContext` field (or via the `UserPromptSubmit` hook for mid-session re-injection if needed). PreCompact's job is *persistence*, not *delivery*.
+- `SessionEnd` hook generates a `trigger='session_end'` bundle; this is what `SessionStart` consumes next session. (NOT `Stop` — `Stop` fires per-turn, which would generate a bundle on every agent response.)
 - `SessionStart` reads the most recent un-superseded bundle for the active project (via `bundles_project_active_idx`). If `generated_at` is > 14 days old, it regenerates rather than using the stale one.
 - Manual: `brain bundle generate --project <slug>` for testing or before a planned context wipe.
 
@@ -512,10 +551,11 @@ Configured in `~/.claude/settings.json` (user installs once). Hooks call a Pytho
 
 | Hook | Action |
 |---|---|
-| `PostToolUse` | Insert `events` row + truncated output into `sources` (under `kind='tool_call'`). Bash output capture: **head + tail + error-span preservation**. Default: 4KB head + 4KB tail, PLUS any lines matching `(FAIL|ERROR|panic|trace|exception|Traceback)` from anywhere in the middle (capped at 4KB additional). Each retained span is delimited; truncation gap shows `[N lines elided]`. Configurable via `brain_config.tool_output_cap`. |
+| `PostToolUse` | Insert `events` row + truncated output into `sources` (under `kind='tool_call_output'`). Bash output capture: **head + tail + error-span preservation**. Default: 4KB head + 4KB tail, PLUS any lines matching `(FAIL|ERROR|panic|trace|exception|Traceback)` from anywhere in the middle (capped at 4KB additional). Each retained span is delimited; truncation gap shows `[N lines elided]`. Truncation metadata stored on `sources.flags`. Configurable via `brain_config.tool_output_cap`. |
 | `PreCompact` | Generate a `session_resume_bundle` snapshotting current state before the compactor runs. |
 | `SessionStart` | If a resume bundle exists for the active project, agent should consult it. |
-| `Stop` | Finalize current session row: set `ended_at`, generate session summary, classify session into memory buckets. |
+| `Stop` | Fires **per-turn** when Claude finishes responding (NOT per-session). Used for: incremental capture-completeness check (count events written during this turn), flush of any pending per-turn buffer, refresh of working-state pointer. **Does NOT set `sessions.ended_at` and does NOT generate `trigger='session_end'` bundles** — that would fire on every turn. |
+| `SessionEnd` | The true end-of-session hook (fires when the conversation actually terminates). Sets `sessions.ended_at`, generates a `trigger='session_end'` resume bundle, classifies the session into memory buckets, runs the §Compliance capture-completeness check. |
 | `SubagentStop` | Mark subtask outcome if subagent was running a subtask. |
 
 The hooks are installed by the setup skill (opt-in, gated on user approval) and edit `~/.claude/settings.json` carefully.
@@ -543,9 +583,9 @@ Two surfaces:
 
 v1's enforcement was implicit hope. v2 adds three teeth:
 
-1. **`Stop` hook capture-completeness check.** When a session ends, count `events` and `subtask_summary` rows written. If the session had ≥ 5 Claude turns (detectable from session transcript metadata) AND < 3 capture events, the bundle generator marks the session under-captured. `brain health` surfaces under-captured sessions in its report.
+1. **`SessionEnd` hook capture-completeness check.** When the session actually ends (not per-turn), count `events` and `subtask_summary` rows written across the whole session. If the session had ≥ 5 Claude turns (detectable from session transcript metadata) AND < 3 capture events, the bundle generator marks the session under-captured. `brain health` surfaces under-captured sessions in its report. (`Stop` may also emit a lightweight per-turn capture-count signal to the same counter, but the threshold check fires at `SessionEnd`.)
 2. **Bundle-generator quality signal.** A session that produces a near-empty bundle (no active subtask, no decisions, no failures) is auto-flagged in `sessions.summary_id` as a "thin session." Repeated thin sessions for the same project trigger a `brain status` warning recommending review.
-3. **Optional strict mode.** Users opt in via `brain_config.key = 'strict_mode' value = 'true'`. When strict, the `Stop` hook returns a non-zero exit if the session is under-captured, surfacing a system-reminder visible to the next session. This is opt-in because false positives during exploratory or one-shot work would create friction.
+3. **Optional strict mode.** Users opt in via `brain_config.key = 'strict_mode' value = 'true'`. When strict, the `SessionEnd` hook returns a non-zero exit if the session is under-captured, surfacing a system-reminder visible to the next session. This is opt-in because false positives during exploratory or one-shot work would create friction.
 
 Compliance is observability + nudges, not a hard block. The brain cannot literally compel an LLM to capture; it can make non-capture visible, persistent, and uncomfortable.
 
@@ -564,7 +604,26 @@ The router (in capture path) classifies each new source. The classifier is the e
 
 **Stack (locked in by prior research, refined by FP/FN research):**
 
-1. **Metadata pre-filter** — every retrieval first narrows by `project_id`, `t_valid_to IS NULL`, `bucket`, optional `kind` / `status`.
+1. **Metadata pre-filter** — every retrieval first narrows the candidate set with this contract:
+
+   ```sql
+   WHERE s.t_valid_to IS NULL                              -- bi-temporal: still current
+     AND s.status = 'active'                                -- visibility filter
+     AND (
+           $project_id IS NULL                              -- caller didn't scope
+        OR s.project_id = $project_id                       -- primary project match
+        OR EXISTS (SELECT 1 FROM source_projects sp        -- or M2M membership
+                   WHERE sp.source_id = s.id AND sp.project_id = $project_id)
+         )
+     AND (
+           $buckets IS NULL
+        OR EXISTS (SELECT 1 FROM memory_classifications mc
+                   WHERE mc.source_id = s.id AND mc.bucket = ANY($buckets))
+         )
+     AND ($kinds IS NULL OR s.kind = ANY($kinds))
+   ```
+
+   `$project_id` / `$buckets` / `$kinds` come from `obsidian-recall` invocation context (current active project, requested buckets, optional kind filter). Sources with `status='archived'` are hidden by default; pass `--include-archived` to include them.
 2. **Hybrid candidate generation, parallel:**
    - Postgres FTS (BM25-like via `ts_rank_cd`) over `sources_fts.tsv`. k=100.
    - pgvector kNN over `embeddings_1024.vec` with HNSW. k=100. **Always** filtered by `model_id = $active AND model_ver = $active_ver` (read from `brain_config`) — never compare across embedding models.
@@ -984,14 +1043,18 @@ CREATE TABLE reasoning_cache (
 
 Prompt templates themselves (the actual Haiku prompt strings) live in `brain/reasoning/prompts/<helper>.txt` and are versioned (`prompt_ver` bumps invalidate the cache). The spec deliberately doesn't fix prompts in the design doc — they will evolve faster than the schema.
 
-## Obsidian markdown view (co-equal store, not just a derived view)
+## Obsidian markdown view (derived view + partial DR fallback — scope corrected)
 
-**Important framing shift from the original spec:** the markdown files under `<vault>/Agent-Brain/` are not only a derived view for humans — they are also the **disaster-recovery substrate**. If Postgres corrupts, the markdown files are the fallback from which the entire DB can be re-ingested without data loss. This dual role drives two requirements:
+The markdown files under `<vault>/Agent-Brain/` serve two roles, but neither is a complete substitute for the DB:
 
-1. **Lossless export** — every captured `sources` row that's meant to be human-readable (decisions, gotchas, patterns, project indexes, daily logs, session summaries, failure memories) must render to a markdown file with frontmatter that includes `db_id: <source_id>` and all metadata sufficient to recreate the row on re-ingest.
-2. **Round-trip semantic equivalence** — re-ingesting an exported markdown file produces a `sources` row whose `content` matches the original (modulo regenerated frontmatter). Wikilinks resolve to the same target rows.
+1. **Primary role:** human-readable derived view of the narrative subset of the brain (decisions, gotchas, patterns, project indexes, daily logs, session summaries, failure-memory narratives). Generated by a Python helper, refreshed on demand or via cron.
+2. **Partial DR fallback:** if Postgres is corrupted, the markdown files preserve the **narrative knowledge layer** — what was thought, decided, learned. They do NOT preserve: the episodic stream (`events`, `tool_call_output` history, ordered subtask traces), retrieval logs, embeddings, knowledge-graph edges, procedure lifecycle counters, or any structured derivation. Markdown-only re-ingest reconstructs roughly the `bucket=semantic` slice + project indexes; everything else is lost.
 
-Generated by a Python helper, refreshed on demand or via a cron.
+**Primary DR is `pg_dump`, not markdown.** Per §Operational concerns, nightly `pg_dump` is the canonical disaster-recovery path. Markdown serves as a second-tier fallback for the human-readable subset only.
+
+**Lossless contract per kind:** the markdown export preserves byte-identical `content` for the kinds listed in §Content fidelity rule as "lossless." `kind='tool_call_output'` rows are *not* exported to markdown by default (high volume, low human value) — they live in DB only and depend on `pg_dump` for DR.
+
+**Round-trip semantic equivalence** (for the exported subset): re-ingesting an exported markdown file produces a `sources` row whose `content` matches the original (modulo regenerated frontmatter). Wikilinks resolve to the same target rows. Frontmatter includes `db_id: <source_id>` to enable re-pairing on re-ingest.
 
 Export shape inside `<vault>/Agent-Brain/`:
 
@@ -1067,7 +1130,7 @@ The build ships in 6 phases (Phase 3 split into 3a/3b/3c per review). Each phase
 
 ### Phase 1 — Foundation (v2.0)
 
-Schema scope: `sources` (with `provenance_kind`, `generation_depth`, `flags`), `sources_fts`, `memory_classifications`, `projects`, `sessions`, `subtasks`, `events` (with `procedure_id` FK), `failure_memories`, `procedures` (created empty; populated by user-authored imports in Phase 1, by `distill_pattern`/`propose_skill` from Phase 4), `retrieval_log`, `brain_config`. **Does not include** `embeddings_1024` or HNSW index — pgvector install can be a Phase 1 dependency (extension is created) but no embedding rows are written yet, no HNSW index is built.
+Schema scope: `sources` (with `project_id`, `status`, `provenance_kind`, `generation_depth`, `flags`), `sources_fts`, `source_projects` (M2M), `memory_classifications`, `projects`, `sessions`, `subtasks`, `events` (with `procedure_id` FK), `failure_memories`, `procedures` (created empty; populated by user-authored imports in Phase 1, by `distill_pattern`/`propose_skill` from Phase 4), **`entities` and `edges`** (Phase 1 includes minimal entity/edge tables to support `entity_timeline` and `brain-decompose-document` building blocks; LLM-based extraction lands Phase 2), `retrieval_log`, `brain_config`. **Does not include** `embeddings_1024` or HNSW index — pgvector install can be a Phase 1 dependency (extension is created) but no embedding rows are written yet, no HNSW index is built.
 
 - Postgres install + `vector` + `pg_trgm` extensions (via setup skill, optional `docker-compose.yml` provided)
 - Schema migrations (alembic): all Phase-1 tables above + the `vector` extension declaration so Phase 2's migration is a single `CREATE TABLE` away
@@ -1092,11 +1155,11 @@ Schema scope: `sources` (with `provenance_kind`, `generation_depth`, `flags`), `
 - `brain-link`, `brain-decide`, `brain-status` skills
 - `brain-health` extended with τ-rolling-ratio reports per bucket (full audit + compliance signal stays from Phase 1)
 - **`brain-promote-answer`** skill — promotes a high-confidence `reasoning_cache` entry into a permanent `sources` row with `provenance_kind='synthesized'` and `synthesized_from = [input_source_ids]`. Human-gated. Closes the "good answers shouldn't disappear into chat history" gap. Safe because the down-weight ships in the same phase.
-- **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. All four building blocks already exist; this skill names the composition + ships a default Obsidian render template.
+- **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. The schema tables (`entities`, `edges`) ship in Phase 1; the LLM-driven `extract_claims` + `extract_entities` helpers ship in Phase 2 — this skill arrives in Phase 2 as the named composition + ships a default Obsidian render template.
 
 ### Phase 3a — Capture fidelity + compaction-survival (the cognition-preservation core)
 
-- Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart) — installable opt-in
+- Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart, SessionEnd) — installable opt-in. Note: `SessionStart` delivers the bundle into agent context via `additionalContext`; `PreCompact` only *persists* the bundle (no documented stdout-injection channel).
 - `session_resume_bundles` generator with the full selection algorithm and token-budget enforcement
 - Failure-memory capture flow (`brain-failure` skill + auto-flag from `Stop` hook)
 - File-watcher (Obsidian-side edits → DB update with conflict detection)
@@ -1167,7 +1230,7 @@ Success criterion #7 ("skill loop unchanged in latency vs v1 bash-only") applies
 ### Backup & disaster recovery
 
 - **Nightly `pg_dump` cron** writes a logical backup to `<vault>/Agent-Brain/_backups/brain-YYYY-MM-DD.sql.gz`. Retention: 30 days rolling. The setup skill installs the cron.
-- **Markdown view is the second-tier fallback** (per §Obsidian markdown view). If Postgres corrupts beyond repair, `brain reingest --from-markdown <vault>/Agent-Brain/` reconstructs the DB. Non-human-readable content (embeddings, FTS indexes, retrieval logs) is lost in this path and rebuilt; the irreplaceable text content survives.
+- **Markdown view is a PARTIAL second-tier fallback** (per §Obsidian markdown view). If both `pg_dump` backups AND Postgres are lost, `brain reingest --from-markdown <vault>/Agent-Brain/` reconstructs the narrative knowledge layer (decisions, gotchas, patterns, project indexes, session summaries). Embeddings, FTS indexes, retrieval logs, `events`/`tool_call_output`, knowledge-graph edges, and procedure lifecycle counters are **permanently lost** in this path. Treat markdown DR as "save the thinking, lose the activity log."
 - **WAL archiving** is opt-in for users running long-lived projects (`brain config set wal_archiving on` enables Postgres archive_mode + an `archive_command` to a directory). Default off — adds setup complexity.
 
 ### Mid-write corruption

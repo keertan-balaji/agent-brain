@@ -237,6 +237,121 @@ def revise_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None
     click.echo(json.dumps(plan.model_dump(mode="json"), indent=2))
 
 
+@main.group()
+@click.pass_context
+def ingest(ctx: click.Context) -> None:
+    """Chunk + embed a source (plain), or run agent-driven Contextual Retrieval."""
+
+
+@ingest.command("source")
+@click.argument("source_id", type=int)
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.pass_context
+def ingest_source_cmd(
+    ctx: click.Context,
+    source_id: int,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+) -> None:
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.ingest import ingest_source as _ingest
+
+    embedder = BgeM3Embedder()
+    summary = _ingest(
+        ctx.obj["engine"],
+        source_id=source_id,
+        embedder=embedder,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "parent_source_id": summary.parent_source_id,
+                "chunks_created": summary.chunks_created,
+                "context_summaries_inserted": summary.context_summaries_inserted,
+                "embeddings_inserted": summary.embeddings_inserted,
+            },
+            indent=2,
+        )
+    )
+
+
+@ingest.command("prepare-contexts")
+@click.argument("source_id", type=int)
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.pass_context
+def ingest_prepare_contexts_cmd(
+    ctx: click.Context,
+    source_id: int,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+) -> None:
+    from brain.ingest import ingest_prepare_contexts as _prep
+
+    prep = _prep(
+        ctx.obj["engine"],
+        source_id=source_id,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "source_id": prep.source_id,
+                "doc_body": prep.doc_body,
+                "chunks": [
+                    {"chunk_idx": c.chunk_idx, "child_text": c.child_text, "prompt": c.prompt}
+                    for c in prep.chunks
+                ],
+            },
+            indent=2,
+        )
+    )
+
+
+@ingest.command("finalize-contexts")
+@click.argument("source_id", type=int)
+@click.option("--contexts-json", required=True, help="JSON array of {chunk_idx, context}")
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.pass_context
+def ingest_finalize_contexts_cmd(
+    ctx: click.Context,
+    source_id: int,
+    contexts_json: str,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+) -> None:
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.ingest import ChunkContext, ingest_finalize_contexts as _fin
+
+    raw = json.loads(contexts_json)
+    contexts = [ChunkContext(chunk_idx=int(c["chunk_idx"]), context=str(c["context"])) for c in raw]
+    embedder = BgeM3Embedder()
+    summary = _fin(
+        ctx.obj["engine"],
+        source_id=source_id,
+        embedder=embedder,
+        contexts=contexts,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    click.echo(
+        json.dumps(
+            {
+                "parent_source_id": summary.parent_source_id,
+                "chunks_created": summary.chunks_created,
+                "context_summaries_inserted": summary.context_summaries_inserted,
+                "embeddings_inserted": summary.embeddings_inserted,
+            },
+            indent=2,
+        )
+    )
+
+
 @main.command()
 @click.option("--threshold", default=3, type=int)
 @click.pass_context

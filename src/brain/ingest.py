@@ -1,21 +1,29 @@
-"""brain.ingest_source(): chunk + (optionally) contextualize + embed + persist.
+"""brain.ingest: chunk + embed sources.
 
-Assumes the parent source row was already written via brain.write(). For each
-child window produced by the chunker:
-  1. Reuse brain.write() to insert a child source row (kind == parent.kind,
-     parent_id, span offsets) — dedup-scoped and FTS-materialized automatically.
-  2. If llm_client is provided, run Contextual Retrieval (Haiku) and persist the
-     context summary as a separate `chunk_context` source row
-     (provenance_kind='synthesized', synthesized_from=[parent_source_id]).
-  3. Embed the (optionally contextualized) child text via BGE-M3 and INSERT into
-     embeddings_1024 as a halfvec literal.
+Three entry points:
 
-Returns IngestSummary with the counts to make tests + audit logs simple.
+  ingest_source(engine, *, source_id, embedder, ...) -> IngestSummary
+      Plain ingest. Chunks + embeds without per-chunk context summaries.
+      Default for most ingests.
+
+  ingest_prepare_contexts(engine, *, source_id, ...) -> ContextPreparation
+      Step 1 of agent-driven Contextual Retrieval. Renders per-chunk prompts
+      so the calling agent can fulfill them inline (no embedded LLM call).
+
+  ingest_finalize_contexts(engine, *, source_id, embedder, contexts, ...) -> IngestSummary
+      Step 2. Takes the agent's per-chunk context summaries and inserts them
+      as `chunk_context` source rows (provenance_kind='synthesized'), then
+      embeds the (context + child) text via BGE-M3.
+
+The chunker runs again in finalize (deterministic given identical params +
+content) so the agent doesn't pass back chunk text — chunk_idx is the only
+linkage.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from sqlalchemy import Engine, text
@@ -23,10 +31,11 @@ from sqlalchemy import Engine, text
 from brain.db import session_scope
 from brain.embed.bge_m3 import BgeM3Embedder
 from brain.embed.chunker import chunk_document
-from brain.llm.client import AnthropicClient
-from brain.llm.contextual import contextualize_chunk
 from brain.schemas import SourceInput
 from brain.write import write
+
+_PROMPT_PATH = Path(__file__).parent / "ingest_prompts" / "chunk_context.txt"
+_PROMPT_TEMPLATE = _PROMPT_PATH.read_text()
 
 
 @dataclass
@@ -37,19 +46,31 @@ class IngestSummary:
     embeddings_inserted: int
 
 
+@dataclass
+class ChunkPrep:
+    chunk_idx: int
+    child_text: str
+    prompt: str
+
+
+@dataclass
+class ContextPreparation:
+    source_id: int
+    doc_body: str
+    chunks: list[ChunkPrep]
+
+
+@dataclass
+class ChunkContext:
+    chunk_idx: int
+    context: str
+
+
 def _halfvec_literal(vec: np.ndarray) -> str:
     return "[" + ",".join(f"{x:.6f}" for x in vec.tolist()) + "]"
 
 
-def ingest_source(
-    engine: Engine,
-    *,
-    source_id: int,
-    embedder: BgeM3Embedder,
-    llm_client: AnthropicClient | None = None,
-    child_max_tokens: int = 256,
-    parent_max_tokens: int = 1024,
-) -> IngestSummary:
+def _load_source(engine: Engine, source_id: int) -> tuple[str, str, int | None]:
     with session_scope(engine) as s:
         row = s.execute(
             text(
@@ -58,19 +79,26 @@ def ingest_source(
             ),
             {"id": source_id},
         ).one()
-    parent_kind, parent_content, parent_project_id = row
+    return row[0], row[1], row[2]
 
-    chunks = chunk_document(
-        parent_content,
-        child_max_tokens=child_max_tokens,
-        parent_max_tokens=parent_max_tokens,
-    )
 
+def _insert_chunks_and_embeddings(
+    engine: Engine,
+    *,
+    source_id: int,
+    parent_kind: str,
+    parent_project_id: int | None,
+    parent_content: str,
+    embedder: BgeM3Embedder,
+    chunks,
+    contexts: list[str] | None,
+) -> IngestSummary:
+    """Shared writer used by ingest_source (contexts=None) and ingest_finalize_contexts."""
     chunk_ids: list[int] = []
     embed_inputs: list[str] = []
     context_count = 0
 
-    for ch in chunks:
+    for i, ch in enumerate(chunks):
         child_src = SourceInput(
             kind=parent_kind,
             content=ch.child_text,
@@ -83,20 +111,18 @@ def ingest_source(
         chunk_ids.append(child_res.source_id)
 
         embed_text = ch.child_text
-        if llm_client is not None:
-            ctx = contextualize_chunk(
-                llm_client, document=parent_content, chunk=ch.child_text
-            )
+        if contexts is not None:
+            ctx = contexts[i]
             ctx_src = SourceInput(
                 kind="chunk_context",
-                content=ctx.context_summary,
+                content=ctx,
                 project_id=parent_project_id,
                 provenance_kind="synthesized",
                 synthesized_from=[source_id],
             )
             write(engine, ctx_src)
             context_count += 1
-            embed_text = ctx.contextualized_text
+            embed_text = f"{ctx}\n\n{ch.child_text}"
 
         embed_inputs.append(embed_text)
 
@@ -125,4 +151,95 @@ def ingest_source(
         chunks_created=len(chunks),
         context_summaries_inserted=context_count,
         embeddings_inserted=inserted,
+    )
+
+
+def ingest_source(
+    engine: Engine,
+    *,
+    source_id: int,
+    embedder: BgeM3Embedder,
+    child_max_tokens: int = 256,
+    parent_max_tokens: int = 1024,
+) -> IngestSummary:
+    parent_kind, parent_content, parent_project_id = _load_source(engine, source_id)
+    chunks = chunk_document(
+        parent_content,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    return _insert_chunks_and_embeddings(
+        engine,
+        source_id=source_id,
+        parent_kind=parent_kind,
+        parent_project_id=parent_project_id,
+        parent_content=parent_content,
+        embedder=embedder,
+        chunks=chunks,
+        contexts=None,
+    )
+
+
+def ingest_prepare_contexts(
+    engine: Engine,
+    *,
+    source_id: int,
+    child_max_tokens: int = 256,
+    parent_max_tokens: int = 1024,
+) -> ContextPreparation:
+    _, parent_content, _ = _load_source(engine, source_id)
+    chunks = chunk_document(
+        parent_content,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    rendered_chunks = [
+        ChunkPrep(
+            chunk_idx=i,
+            child_text=ch.child_text,
+            prompt=_PROMPT_TEMPLATE.format(document=parent_content, chunk=ch.child_text),
+        )
+        for i, ch in enumerate(chunks)
+    ]
+    return ContextPreparation(
+        source_id=source_id,
+        doc_body=parent_content,
+        chunks=rendered_chunks,
+    )
+
+
+def ingest_finalize_contexts(
+    engine: Engine,
+    *,
+    source_id: int,
+    embedder: BgeM3Embedder,
+    contexts: list[ChunkContext],
+    child_max_tokens: int = 256,
+    parent_max_tokens: int = 1024,
+) -> IngestSummary:
+    parent_kind, parent_content, parent_project_id = _load_source(engine, source_id)
+    chunks = chunk_document(
+        parent_content,
+        child_max_tokens=child_max_tokens,
+        parent_max_tokens=parent_max_tokens,
+    )
+    if len(contexts) != len(chunks):
+        raise ValueError(
+            f"contexts count mismatch: chunker produced {len(chunks)} chunks "
+            f"but caller supplied {len(contexts)} contexts"
+        )
+    # Align by chunk_idx (order preserved by the chunker)
+    contexts_sorted = sorted(contexts, key=lambda c: c.chunk_idx)
+    if any(c.chunk_idx != i for i, c in enumerate(contexts_sorted)):
+        raise ValueError("contexts chunk_idx values must cover 0..N-1 contiguously")
+    context_strs = [c.context for c in contexts_sorted]
+    return _insert_chunks_and_embeddings(
+        engine,
+        source_id=source_id,
+        parent_kind=parent_kind,
+        parent_project_id=parent_project_id,
+        parent_content=parent_content,
+        embedder=embedder,
+        chunks=chunks,
+        contexts=context_strs,
     )

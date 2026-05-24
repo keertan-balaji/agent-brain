@@ -62,7 +62,8 @@ def _truncate_tables(pg_url: str) -> None:
                     failure_memories,
                     memory_classifications, source_projects, sources_fts,
                     sources,
-                    subtasks, sessions, projects
+                    subtasks, sessions, projects,
+                    reasoning_cache
                 RESTART IDENTITY CASCADE
                 """
             )

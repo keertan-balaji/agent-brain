@@ -126,6 +126,40 @@ def summarize_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> N
     click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
 
 
+@main.group()
+@click.pass_context
+def compare(ctx: click.Context) -> None:
+    """Prepare/finalize the compare reasoning helper."""
+
+
+@compare.command("prepare")
+@click.option("--a-id", "a_source_id", required=True, type=int, help="Source A id")
+@click.option("--b-id", "b_source_id", required=True, type=int, help="Source B id")
+@click.pass_context
+def compare_prepare_cmd(ctx: click.Context, a_source_id: int, b_source_id: int) -> None:
+    from brain.reasoning.compare import compare_prepare as _prep
+
+    bundle = _prep(ctx.obj["engine"], a_source_id=a_source_id, b_source_id=b_source_id)
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@compare.command("finalize")
+@click.option("--cache-key", required=True, help="Hex cache key from prepare")
+@click.option("--output", required=True, help="JSON output string to validate")
+@click.pass_context
+def compare_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.compare import compare_finalize as _fin
+
+    out = _fin(ctx.obj["engine"], cache_key=bytes.fromhex(cache_key), raw_output=output)
+    click.echo(json.dumps(out.model_dump(mode="json"), indent=2))
+
+
 @main.command()
 @click.option("--threshold", default=3, type=int)
 @click.pass_context

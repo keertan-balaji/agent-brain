@@ -70,24 +70,30 @@ def session_start_cmd(ctx: click.Context) -> None:
         payload={"source": inp.source, "model": inp.model, "transcript_path": inp.transcript_path},
     )
 
-    # Look for the latest unconsumed, non-superseded bundle for this cwd.
+    # Atomic claim-and-consume: a single UPDATE with FOR UPDATE SKIP LOCKED on
+    # the inner SELECT guarantees that two concurrent SessionStart hooks for the
+    # same cwd cannot both consume the same bundle. The losing hook's inner
+    # SELECT returns no row (SKIP LOCKED skips the row the winner is updating),
+    # so its UPDATE affects zero rows and RETURNING is empty.
     with session_scope(engine) as s:
         row = s.execute(
             text(
-                "SELECT id, rendered FROM session_resume_bundles "
-                "WHERE cwd = :c AND consumed_at IS NULL AND superseded_at IS NULL "
-                "ORDER BY generated_at DESC LIMIT 1"
+                "UPDATE session_resume_bundles "
+                "SET consumed_at = :n "
+                "WHERE id = ("
+                "  SELECT id FROM session_resume_bundles "
+                "  WHERE cwd = :c AND consumed_at IS NULL AND superseded_at IS NULL "
+                "  ORDER BY generated_at DESC LIMIT 1 "
+                "  FOR UPDATE SKIP LOCKED"
+                ") "
+                "RETURNING rendered"
             ),
-            {"c": inp.cwd},
+            {"n": datetime.now(timezone.utc), "c": inp.cwd},
         ).fetchone()
         if row is None:
             _emit_session_start_output("")
             return
-        bundle_id, rendered = row.id, row.rendered
-        s.execute(
-            text("UPDATE session_resume_bundles SET consumed_at = :n WHERE id = :i"),
-            {"n": datetime.now(timezone.utc), "i": bundle_id},
-        )
+        rendered = row.rendered
     _emit_session_start_output(rendered)
 
 

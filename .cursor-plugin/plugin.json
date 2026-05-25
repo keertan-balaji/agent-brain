@@ -1,14 +1,14 @@
 {
-  "name": "obsidian-second-brain",
-  "displayName": "Obsidian Second Brain",
-  "description": "Turns an Obsidian vault into a persistent, organized second brain for coding agents. Filesystem-direct, no MCP.",
-  "version": "0.2.0",
+  "name": "agent-brain",
+  "displayName": "Agent Brain",
+  "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers. Filesystem-direct, no MCP.",
+  "version": "0.4.0",
   "author": {
-    "name": "keertan",
+    "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"
   },
-  "homepage": "https://github.com/keertan/obsidian-second-brain",
-  "repository": "https://github.com/keertan/obsidian-second-brain",
+  "homepage": "https://github.com/keertan-balaji/agent-brain",
+  "repository": "https://github.com/keertan-balaji/agent-brain",
   "license": "MIT",
   "keywords": [
     "obsidian",

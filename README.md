@@ -21,15 +21,15 @@ The repo ships parallel plugin manifests for each platform. Pick yours.
 Register this repo as a marketplace, then install the plugin:
 
 ```bash
-/plugin marketplace add keertan/obsidian-second-brain
-/plugin install obsidian-second-brain@obsidian-second-brain
+/plugin marketplace add keertan-balaji/agent-brain
+/plugin install agent-brain@agent-brain
 ```
 
 Or, for local development (no GitHub round-trip), point the marketplace at the local clone:
 
 ```bash
-/plugin marketplace add /home/keertan/codes/brain
-/plugin install obsidian-second-brain@obsidian-second-brain
+/plugin marketplace add <path-to-repo>
+/plugin install agent-brain@agent-brain
 ```
 
 Symlink fallback (no marketplace, no plugin system):
@@ -41,14 +41,14 @@ bash clients/install-claude-code.sh
 Then add the vault path to `~/.claude/settings.json` so native file tools reach it (auto-mode correctly blocks the agent from doing this for you):
 
 ```json
-"permissions": { "additionalDirectories": ["/home/keertan/Documents/ObsidianVault"] }
+"permissions": { "additionalDirectories": ["~/Documents/ObsidianVault"] }
 ```
 
 ### Codex CLI / Codex App
 
 ```bash
 /plugins
-# search "obsidian-second-brain", install
+# search "agent-brain", install
 ```
 
 The repo includes `.codex-plugin/plugin.json` with the full Codex interface manifest.
@@ -58,28 +58,28 @@ The repo includes `.codex-plugin/plugin.json` with the full Codex interface mani
 In Cursor agent chat:
 
 ```
-/add-plugin obsidian-second-brain
+/add-plugin agent-brain
 ```
 
 Or, for ambient instructions without the plugin runtime, drop the universal instructions file into the repo you're working in:
 
 ```bash
 mkdir -p .cursor/rules
-cp clients/agent-instructions.md .cursor/rules/obsidian-brain.mdc
+cp clients/agent-instructions.md .cursor/rules/agent-brain.mdc
 ```
 
 ### Gemini CLI
 
 ```bash
-gemini extensions install https://github.com/keertan/obsidian-second-brain
-gemini extensions update obsidian-second-brain   # to refresh later
+gemini extensions install https://github.com/keertan-balaji/agent-brain
+gemini extensions update agent-brain   # to refresh later
 ```
 
 ### GitHub Copilot CLI
 
 ```bash
-copilot plugin marketplace add keertan/obsidian-second-brain
-copilot plugin install obsidian-second-brain@obsidian-second-brain
+copilot plugin marketplace add keertan-balaji/agent-brain
+copilot plugin install agent-brain@agent-brain
 ```
 
 For VS Code Copilot (no plugin marketplace), drop the instructions file:

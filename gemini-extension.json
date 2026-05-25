@@ -1,6 +1,6 @@
 {
-  "name": "obsidian-second-brain",
-  "description": "Turns an Obsidian vault into a persistent second brain for Gemini CLI. Structured recall and capture across sessions.",
-  "version": "0.2.0",
+  "name": "agent-brain",
+  "description": "Persistent cognition store for Gemini CLI — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers.",
+  "version": "0.4.0",
   "contextFileName": "GEMINI.md"
 }

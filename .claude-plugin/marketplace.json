@@ -1,22 +1,22 @@
 {
-  "name": "obsidian-second-brain",
+  "name": "agent-brain",
   "owner": {
     "name": "keertan",
     "email": "keertan@syntheticsciences.ai"
   },
   "metadata": {
-    "description": "Obsidian-as-second-brain skill pack for coding agents",
-    "version": "0.2.0"
+    "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers.",
+    "version": "0.4.0"
   },
   "plugins": [
     {
-      "name": "obsidian-second-brain",
+      "name": "agent-brain",
       "source": {
         "source": "url",
-        "url": "https://github.com/keertan/obsidian-second-brain.git"
+        "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "Persistent, organized memory for coding agents. Filesystem-direct, agent-agnostic, mandatory project-bootstrap rule.",
-      "version": "0.2.0",
+      "description": "Phase 2.5: hybrid retrieval (BGE-M3 + RRF + mxbai rerank), 4 agent-driven reasoning helpers, brain-rot defenses, 12 skills. No Anthropic API key required.",
+      "version": "0.4.0",
       "strict": true
     }
   ]

@@ -1,14 +1,14 @@
 {
-  "name": "obsidian-second-brain",
-  "version": "0.2.0",
-  "description": "Turns an Obsidian vault into a persistent second brain for coding agents. Five skills enforce a project-bootstrap-first workflow, structured recall before non-trivial work, and structured capture of decisions/gotchas.",
+  "name": "agent-brain",
+  "version": "0.4.0",
+  "description": "Persistent cognition store for AI coding agents (Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers). Twelve brain-* skills cover capture, recall, structured reasoning, contextual ingest. Five obsidian-* skills retained for vault interop.",
   "author": {
-    "name": "keertan",
+    "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai",
-    "url": "https://github.com/keertan"
+    "url": "https://github.com/keertan-balaji"
   },
-  "homepage": "https://github.com/keertan/obsidian-second-brain",
-  "repository": "https://github.com/keertan/obsidian-second-brain",
+  "homepage": "https://github.com/keertan-balaji/agent-brain",
+  "repository": "https://github.com/keertan-balaji/agent-brain",
   "license": "MIT",
   "keywords": [
     "obsidian",
@@ -22,10 +22,10 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Obsidian Second Brain",
-    "shortDescription": "Persistent, organized memory in your Obsidian vault for any coding agent.",
-    "longDescription": "Coding agents waste time and context every session rediscovering enterprise knowledge — architecture, APIs, process docs, prior decisions, recurring gotchas. This pack gives agents a structured vault, mandatory project bootstrap on entry, recall-before-coding, and structured capture of learnings. Filesystem-direct: no MCP, no server. Works across Claude Code, Codex, Cursor, Copilot, Gemini, and anything that reads markdown.",
-    "developerName": "keertan",
+    "displayName": "Agent Brain",
+    "shortDescription": "Persistent cognition store for any coding agent — Postgres + pgvector + hybrid retrieval + agent-driven reasoning.",
+    "longDescription": "Coding agents waste time and context every session rediscovering knowledge — architecture, APIs, prior decisions, recurring gotchas. Agent Brain gives them a Postgres-backed persistent memory with hybrid retrieval (FTS + BGE-M3 + RRF + mxbai cross-encoder), agent-driven reasoning helpers (summarize/compare/cite/revise with grounded JSON schemas + DB cache), and brain-rot defenses (provenance-aware down-weighting + per-bucket tau abstain). No Anthropic API key required — the calling agent IS the LLM.",
+    "developerName": "Keertan Balaji",
     "category": "Coding",
     "capabilities": [
       "Interactive",
@@ -33,10 +33,10 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Set up the Obsidian brain.",
-      "Map this repo into Obsidian.",
-      "What does the vault know about <topic>?"
+      "Set up the agent brain.",
+      "Recall: <topic>",
+      "Summarize sources: <ids>"
     ],
-    "websiteURL": "https://github.com/keertan/obsidian-second-brain"
+    "websiteURL": "https://github.com/keertan-balaji/agent-brain"
   }
 }

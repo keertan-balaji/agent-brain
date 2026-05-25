@@ -3,39 +3,21 @@
   "description": "Persistent cognition store for AI coding agents — Phase 2.5 ships agent-driven reasoning helpers (no Anthropic API key required) and 5 new agent-facing skills (v1 obsidian-* skills retained).",
   "version": "0.4.0",
   "author": {
-    "name": "keertan",
+    "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"
   },
-  "homepage": "https://github.com/keertan/obsidian-second-brain",
-  "repository": "https://github.com/keertan/obsidian-second-brain",
+  "homepage": "https://github.com/keertan-balaji/agent-brain",
+  "repository": "https://github.com/keertan-balaji/agent-brain",
   "license": "MIT",
   "keywords": [
-    "obsidian",
+    "agent-brain",
     "second-brain",
     "knowledge-management",
     "memory",
     "skills",
-    "vault",
     "recall",
-    "capture"
-  ],
-  "skills": [
-    "skills/brain-setup",
-    "skills/brain-recall",
-    "skills/brain-health",
-    "skills/brain-link",
-    "skills/brain-decide",
-    "skills/brain-status",
-    "skills/brain-promote-answer",
-    "skills/obsidian-setup",
-    "skills/obsidian-project-bootstrap",
-    "skills/obsidian-map-repo",
-    "skills/obsidian-recall",
-    "skills/obsidian-capture",
-    "skills/brain-summarize",
-    "skills/brain-compare",
-    "skills/brain-cite",
-    "skills/brain-revise",
-    "skills/brain-ingest-contextual"
+    "capture",
+    "reasoning",
+    "retrieval"
   ]
 }

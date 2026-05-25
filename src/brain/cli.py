@@ -14,6 +14,7 @@ from brain.config import load_config
 from brain.db import get_engine
 from brain.helpers.entity_timeline import entity_timeline as _entity_timeline
 from brain.helpers.health import audit as _audit
+from brain.hooks.cli import hook as _hook_group
 from brain.migrate_v1 import migrate_v1_markdown
 from brain.obsidian.export import export_brain_to_markdown
 from brain.read import recall as _recall
@@ -592,6 +593,9 @@ def reingest(ctx: click.Context, vault_path: Path) -> None:
         f"(created {summary.files_created}, dedup hits {summary.dedup_hits}, "
         f"skipped unknown type: {len(summary.skipped_unknown_type)})"
     )
+
+
+main.add_command(_hook_group)
 
 
 if __name__ == "__main__":

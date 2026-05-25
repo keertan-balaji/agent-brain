@@ -4,6 +4,10 @@ services:
     container_name: brain-postgres
     restart: unless-stopped
     shm_size: 256mb
+    command:
+      - postgres
+      - -c
+      - max_connections=500
     environment:
       POSTGRES_DB: brain
       POSTGRES_USER: brain

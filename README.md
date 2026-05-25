@@ -210,6 +210,28 @@ brain --help
 
 Operations: `docs/phase2_5.md`. Plan: `docs/superpowers/plans/2026-05-24-agent-brain-v2-phase-2-5.md`.
 
+## Agent Brain v2 — Phase 3a-1
+
+Phase 3a-1 ships the compaction-survival core. Claude Code's session lifecycle hooks (SessionStart/End, UserPromptSubmit, Stop, PreCompact) now write to the brain, and on `/compact` a structured resume bundle is persisted and re-injected at the next session's start.
+
+```bash
+alembic upgrade head    # migration 010
+/plugin install agent-brain@agent-brain   # carries the hooks
+/reload-plugins
+```
+
+3 new skills:
+
+| Skill | When to use |
+|---|---|
+| `brain-session-log` | List recent session_events |
+| `brain-session-resume` | Inspect or regenerate the latest bundle |
+| `brain-handoff` | Export the bundle to markdown/JSON |
+
+Operations: `docs/phase3a_1.md`. Plan: `docs/superpowers/plans/2026-05-25-agent-brain-v2-phase-3a-1.md`.
+
+Follow-on plans queued: 3a-2 (failure capture + sanitization), 3a-3 (file watcher), 3a-4 (compliance subsystem).
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-05-17-obsidian-second-brain-skill-pack-design.md`

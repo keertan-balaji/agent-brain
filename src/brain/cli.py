@@ -385,6 +385,190 @@ def health(ctx: click.Context, threshold: int) -> None:
     console.print(t_tau)
 
 
+@main.command(name="session-log")
+@click.option("--limit", default=20, type=int)
+@click.option("--cc-session-id", help="Filter to a specific Claude Code session UUID")
+@click.pass_context
+def session_log_cmd(ctx: click.Context, limit: int, cc_session_id: str | None) -> None:
+    """List recent session_events (filterable by Claude Code session UUID)."""
+    from sqlalchemy import text as _text
+    from brain.db import session_scope as _scope
+
+    engine = ctx.obj["engine"]
+    with _scope(engine) as s:
+        if cc_session_id is not None:
+            rows = s.execute(
+                _text(
+                    "SELECT se.occurred_at, se.event_kind, se.payload, ses.cc_session_id "
+                    "FROM session_events se JOIN sessions ses ON se.session_id = ses.id "
+                    "WHERE ses.cc_session_id = :cc "
+                    "ORDER BY se.occurred_at DESC LIMIT :n"
+                ),
+                {"cc": cc_session_id, "n": limit},
+            ).fetchall()
+        else:
+            rows = s.execute(
+                _text(
+                    "SELECT se.occurred_at, se.event_kind, se.payload, ses.cc_session_id "
+                    "FROM session_events se JOIN sessions ses ON se.session_id = ses.id "
+                    "ORDER BY se.occurred_at DESC LIMIT :n"
+                ),
+                {"n": limit},
+            ).fetchall()
+    t = Table("when", "cc_session", "kind", "payload_head", title="Session events")
+    for r in rows:
+        head = str(r.payload)[:60]
+        t.add_row(r.occurred_at.isoformat(), (r.cc_session_id or "")[:8], r.event_kind, head)
+    console.print(t)
+
+
+@main.command(name="session-resume")
+@click.option("--cwd", default=None, help="Working directory (defaults to PWD)")
+@click.option(
+    "--mode",
+    type=click.Choice(["show", "regenerate"]),
+    default="show",
+    help="show: print latest unconsumed bundle. regenerate: build a fresh one and print.",
+)
+@click.pass_context
+def session_resume_cmd(ctx: click.Context, cwd: str | None, mode: str) -> None:
+    """Inspect or regenerate the latest resume bundle for a cwd."""
+    import os as _os
+    import json as _json
+    from datetime import datetime as _dt, timezone as _tz
+
+    from sqlalchemy import text as _text
+
+    from brain.db import session_scope as _scope
+    from brain.hooks.bundle import gather_bundle_selection
+    from brain.hooks.render import render_bundle
+    from brain.hooks.session import start_session
+
+    engine = ctx.obj["engine"]
+    cwd_val = cwd or _os.getcwd()
+
+    if mode == "show":
+        with _scope(engine) as s:
+            row = s.execute(
+                _text(
+                    "SELECT rendered, generated_at, consumed_at FROM session_resume_bundles "
+                    "WHERE cwd = :c ORDER BY generated_at DESC LIMIT 1"
+                ),
+                {"c": cwd_val},
+            ).fetchone()
+        if row is None:
+            click.echo(f"no bundles for cwd={cwd_val}")
+            return
+        click.echo(f"# Latest bundle for {cwd_val}")
+        click.echo(f"# generated_at: {row.generated_at.isoformat()}")
+        click.echo(f"# consumed_at: {row.consumed_at.isoformat() if row.consumed_at else 'unconsumed'}")
+        click.echo("---")
+        click.echo(row.rendered)
+        return
+
+    # regenerate
+    sid = start_session(
+        engine,
+        cc_session_id=f"manual-regenerate-{_dt.now(_tz.utc).timestamp()}",
+        cwd=cwd_val,
+        agent="brain-cli",
+        source="startup",
+    )
+    sel = gather_bundle_selection(engine, session_id=sid, cwd=cwd_val, limit_per_kind=10)
+    rendered = render_bundle(
+        sel,
+        cc_session_id="manual",
+        session_id=sid,
+        cwd=cwd_val,
+        trigger="manual",
+        token_budget=4000,
+        generated_at=_dt.now(_tz.utc),
+    )
+    with _scope(engine) as s:
+        project_id = s.execute(
+            _text("SELECT id FROM projects WHERE repo_root = :r"), {"r": cwd_val},
+        ).scalar()
+        if project_id is None:
+            slug = cwd_val.rstrip("/").rsplit("/", 1)[-1] or "anon"
+            project_id = s.execute(
+                _text(
+                    "INSERT INTO projects(slug, task_type, repo_root) "
+                    "VALUES (:s, 'generic', :r) ON CONFLICT (slug) DO UPDATE SET repo_root = EXCLUDED.repo_root "
+                    "RETURNING id"
+                ),
+                {"s": slug, "r": cwd_val},
+            ).scalar()
+        s.execute(
+            _text(
+                "UPDATE session_resume_bundles SET superseded_at = NOW() "
+                "WHERE cwd = :c AND consumed_at IS NULL AND superseded_at IS NULL"
+            ),
+            {"c": cwd_val},
+        )
+        s.execute(
+            _text(
+                "INSERT INTO session_resume_bundles("
+                "project_id, session_id, trigger, token_budget, manifest, rendered, cwd) "
+                "VALUES(:p, :s, 'manual', :tb, CAST(:m AS jsonb), :r, :c)"
+            ),
+            {
+                "p": project_id,
+                "s": sid,
+                "tb": rendered.manifest["token_budget"],
+                "m": _json.dumps(rendered.manifest),
+                "r": rendered.markdown,
+                "c": cwd_val,
+            },
+        )
+    click.echo(rendered.markdown)
+
+
+@main.command()
+@click.option("--cwd", default=None, help="Working directory (defaults to PWD)")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["markdown", "json"]),
+    default="markdown",
+    help="Output format",
+)
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write to file instead of stdout",
+)
+@click.pass_context
+def handoff(ctx: click.Context, cwd: str | None, fmt: str, out: Path | None) -> None:
+    """Export the current resume bundle (markdown or JSON) for handoff to another agent."""
+    import os as _os
+    import json as _json
+
+    from sqlalchemy import text as _text
+
+    from brain.db import session_scope as _scope
+
+    engine = ctx.obj["engine"]
+    cwd_val = cwd or _os.getcwd()
+    with _scope(engine) as s:
+        row = s.execute(
+            _text(
+                "SELECT rendered, manifest FROM session_resume_bundles "
+                "WHERE cwd = :c ORDER BY generated_at DESC LIMIT 1"
+            ),
+            {"c": cwd_val},
+        ).fetchone()
+    if row is None:
+        click.echo(f"no bundle for cwd={cwd_val}; run `brain session-resume --mode regenerate` first", err=True)
+        ctx.exit(1)
+    body = row.rendered if fmt == "markdown" else _json.dumps(row.manifest, indent=2)
+    if out is not None:
+        out.write_text(body)
+        click.echo(f"wrote {len(body)} bytes to {out}")
+    else:
+        click.echo(body)
+
+
 @main.command(name="entity-timeline")
 @click.argument("entity_id", type=int)
 @click.option("--from", "from_ts", type=click.DateTime())

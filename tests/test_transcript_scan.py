@@ -134,3 +134,23 @@ def test_scan_truncates_oversized_fields(tmp_path: Path) -> None:
     assert len(c.target_problem) <= 400
     assert len(c.attempted_approach) <= 200
     assert len(c.outcome_evidence) <= 600
+
+
+def test_scan_detects_command_not_found_mid_line(tmp_path: Path) -> None:
+    """Shells emit `command not found` mid-line (e.g. `bash: foo: command not found`)."""
+    p = tmp_path / "t.jsonl"
+    _write_transcript(p, [
+        {"type": "user", "uuid": "u1",
+         "message": {"role": "user", "content": "run the helper"}},
+        {"type": "assistant", "uuid": "a1",
+         "message": {"role": "assistant",
+                     "content": [{"type": "tool_use", "name": "Bash",
+                                  "input": {"command": "fooooobar"}}]}},
+        {"type": "user", "uuid": "u2",
+         "message": {"role": "user",
+                     "content": [{"type": "tool_result",
+                                  "content": "bash: fooooobar: command not found\n"}]}},
+    ])
+    cands = scan_for_failures(p, max_lines=200)
+    assert len(cands) == 1
+    assert "command not found" in cands[0].outcome_evidence

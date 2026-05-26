@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _FAILURE_PATTERNS = re.compile(
-    r"^\s*(Traceback|Error|ERROR|FATAL|FAILED|command not found)\b"
+    r"^\s*(Traceback|Error|ERROR|FATAL|FAILED)\b"
+    r"|\bcommand not found\b"  # shells emit this mid-line ("bash: foo: command not found")
     r"|\bExit\s+code\s*[:=]?\s*[1-9]",
     re.IGNORECASE | re.MULTILINE,
 )

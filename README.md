@@ -230,7 +230,30 @@ alembic upgrade head    # migration 010
 
 Operations: `docs/phase3a_1.md`. Plan: `docs/superpowers/plans/2026-05-25-agent-brain-v2-phase-3a-1.md`.
 
-Follow-on plans queued: 3a-2 (failure capture + sanitization), 3a-3 (file watcher), 3a-4 (compliance subsystem).
+## Agent Brain v2 — Phase 3a-2
+
+Phase 3a-2 turns the previously-dormant `failure_memories` table into a live capture surface. The Stop hook now scans the session transcript for failure signatures (Bash `is_error`, `Traceback`, `FAILED`, mid-line `command not found`, non-zero `Exit code`) and upserts `failure_memories` rows. The dedup key is `(target_problem, attempted_approach)` — a re-attempt bumps `retry_count` rather than creating a duplicate row. The ingest path now strips ANSI escapes and flags suspicious instruction-density content (`flags.suspicious=true`) for high-risk kinds (`tool_call_output`, `command`, `web_page`, `code_file`). Recall output wraps high-risk content in `<tool-output>` / `<web-content>` delimiters so consumer LLMs treat it as data.
+
+```bash
+# No new migration. Just:
+git pull && /reload-plugins
+```
+
+New skill + CLI:
+
+| Skill | When to use |
+|---|---|
+| `brain-failure` | Record a failure explicitly, list active failures, or invalidate a stale one |
+
+```bash
+brain failure record --target-problem "..." --attempted-approach "..." --outcome-evidence "..."
+brain failure list [--limit N] [--project-id ID]
+brain failure invalidate <id> --reason "..."
+```
+
+Operations: `docs/phase3a_2.md`. Plan: `docs/superpowers/plans/2026-05-26-agent-brain-v2-phase-3a-2.md`.
+
+Follow-on plans queued: 3a-3 (file watcher), 3a-4 (compliance subsystem).
 
 ## Design docs
 

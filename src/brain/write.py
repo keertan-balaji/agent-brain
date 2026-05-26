@@ -16,6 +16,7 @@ from sqlalchemy import Engine, text
 
 from brain.content_hash import sha256_bytes
 from brain.db import session_scope
+from brain.sanitize import sanitize_for_ingest
 from brain.schemas import SourceInput, WriteResult
 
 
@@ -41,6 +42,7 @@ def write(engine: Engine, source: SourceInput) -> WriteResult:
 
     Returns the resulting source_id and whether a new row was created.
     """
+    source = sanitize_for_ingest(source)  # Phase 3a-2: ANSI strip + suspicious-flag for high-risk kinds
     depth = _compute_generation_depth(
         engine, source.synthesized_from, source.provenance_kind
     )

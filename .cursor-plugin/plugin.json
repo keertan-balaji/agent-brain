@@ -2,7 +2,7 @@
   "name": "agent-brain",
   "displayName": "Agent Brain",
   "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers. Filesystem-direct, no MCP.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

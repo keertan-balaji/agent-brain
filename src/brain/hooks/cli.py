@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import click
 from sqlalchemy import text
 
+from brain import failures
 from brain.db import session_scope
 from brain.hooks.bundle import gather_bundle_selection
+from brain.hooks.transcript_scan import scan_for_failures
 from brain.hooks.contracts import (
     PreCompactInput,
     SessionEndInput,
@@ -48,6 +51,13 @@ def _emit_session_start_output(additional_context: str) -> None:
 
 def _emit_empty_output(event_name: str) -> None:
     click.echo(json.dumps({"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": ""}}))
+
+
+def _emit_noop() -> None:
+    # Stop / SessionEnd / PreCompact hookSpecificOutput shapes do not accept
+    # additionalContext. Emit a minimal valid envelope so the harness schema
+    # validator passes.
+    click.echo("{}")
 
 
 @hook.command("session-start")
@@ -110,7 +120,7 @@ def session_end_cmd(ctx: click.Context) -> None:
         ).scalar()
     if sid is not None:
         record_event(engine, session_id=sid, event_kind="session_end", payload={"reason": inp.reason})
-    _emit_empty_output("SessionEnd")
+    _emit_noop()
 
 
 @hook.command("user-prompt-submit")
@@ -136,7 +146,33 @@ def stop_cmd(ctx: click.Context) -> None:
         engine, cc_session_id=inp.session_id, cwd=inp.cwd, agent="claude-code", source="resume"
     )
     record_event(engine, session_id=sid, event_kind="stop", payload={"stop_hook_active": inp.stop_hook_active})
-    _emit_empty_output("Stop")
+
+    # Phase 3a-2: scan the transcript for failure signatures and auto-flag.
+    try:
+        candidates = scan_for_failures(Path(inp.transcript_path), max_lines=200)
+        project_id: int | None = None
+        if candidates:
+            with session_scope(engine) as s:
+                project_id = s.execute(
+                    text("SELECT id FROM projects WHERE repo_root = :r"),
+                    {"r": inp.cwd},
+                ).scalar()
+        for cand in candidates:
+            failures.record(
+                engine,
+                target_problem=cand.target_problem,
+                attempted_approach=cand.attempted_approach,
+                outcome_evidence=cand.outcome_evidence,
+                project_id=project_id,
+                auto_flagged_by="stop_hook",
+            )
+    except Exception as exc:  # noqa: BLE001 — hook must be non-fatal
+        record_event(
+            engine, session_id=sid, event_kind="hook_error",
+            payload={"hook": "stop", "error": str(exc)[:500]},
+        )
+
+    _emit_noop()
 
 
 @hook.command("pre-compact")

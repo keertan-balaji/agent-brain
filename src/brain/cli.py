@@ -12,12 +12,14 @@ from rich.table import Table
 
 from brain.config import load_config
 from brain.db import get_engine
+from brain import failures as _failures
 from brain.helpers.entity_timeline import entity_timeline as _entity_timeline
 from brain.helpers.health import audit as _audit
 from brain.hooks.cli import hook as _hook_group
 from brain.migrate_v1 import migrate_v1_markdown
 from brain.obsidian.export import export_brain_to_markdown
 from brain.read import recall as _recall
+from brain.retrieval.render import quote_origin
 from brain.schemas import SourceInput
 from brain.write import write as _write
 
@@ -89,7 +91,8 @@ def recall(
     )
     table = Table("id", "kind", "score", "content (head)")
     for h in hits:
-        table.add_row(str(h.id), h.kind, f"{h.score:.3f}", h.content[:80])
+        head = quote_origin(h.kind, h.content[:80])
+        table.add_row(str(h.id), h.kind, f"{h.score:.3f}", head)
     console.print(table)
 
 
@@ -777,6 +780,71 @@ def reingest(ctx: click.Context, vault_path: Path) -> None:
         f"(created {summary.files_created}, dedup hits {summary.dedup_hits}, "
         f"skipped unknown type: {len(summary.skipped_unknown_type)})"
     )
+
+
+@main.group()
+def failure() -> None:
+    """Failure-memory CRUD (typed entity, not just a tag)."""
+
+
+@failure.command("record")
+@click.option("--target-problem", required=True)
+@click.option("--attempted-approach", required=True)
+@click.option("--outcome-evidence", default=None)
+@click.option("--project-id", type=int, default=None)
+@click.pass_context
+def failure_record(
+    ctx: click.Context,
+    target_problem: str,
+    attempted_approach: str,
+    outcome_evidence: str | None,
+    project_id: int | None,
+) -> None:
+    """Record a failure attempt. Dedup on (target-problem, attempted-approach)."""
+    fid, n = _failures.record(
+        ctx.obj["engine"],
+        target_problem=target_problem,
+        attempted_approach=attempted_approach,
+        outcome_evidence=outcome_evidence,
+        project_id=project_id,
+    )
+    click.echo(f"failure_id={fid} retry_count={n}")
+
+
+@failure.command("list")
+@click.option("--project-id", type=int, default=None)
+@click.option("--limit", type=int, default=20)
+@click.pass_context
+def failure_list(
+    ctx: click.Context,
+    project_id: int | None,
+    limit: int,
+) -> None:
+    """List active failures, most-recently-attempted first."""
+    rows = _failures.list_active(ctx.obj["engine"], project_id=project_id, limit=limit)
+    if not rows:
+        click.echo("(no active failures)")
+        return
+    for r in rows:
+        click.echo(
+            f"[{r.id}] retry={r.retry_count} "
+            f"last={r.last_attempted_at:%Y-%m-%d %H:%M} "
+            f"{r.target_problem[:60]} :: {r.attempted_approach[:60]}"
+        )
+
+
+@failure.command("invalidate")
+@click.argument("failure_id", type=int)
+@click.option("--reason", required=True)
+@click.pass_context
+def failure_invalidate(
+    ctx: click.Context,
+    failure_id: int,
+    reason: str,
+) -> None:
+    """Mark a failure as superseded (it no longer applies)."""
+    _failures.invalidate(ctx.obj["engine"], failure_id=failure_id, reason=reason)
+    click.echo(f"invalidated failure_id={failure_id}")
 
 
 main.add_command(_hook_group)

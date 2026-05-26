@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — Phase 2.5 ships agent-driven reasoning helpers (no Anthropic API key required) and 5 new agent-facing skills (v1 obsidian-* skills retained).",
-  "version": "0.5.0",
+  "description": "Persistent cognition store for AI coding agents — Phase 3a-2 adds failure-memory capture (auto-flagged by Stop hook), sanitization at ingest, and origin-aware quoting at recall.",
+  "version": "0.6.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

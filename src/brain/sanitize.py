@@ -1,8 +1,11 @@
 """Sanitization minimum (Phase 3a-2).
 
 Three responsibilities:
-- strip_ansi: remove ANSI escape sequences + non-printable control characters
-  from text, preserving \\t \\n \\r.
+- strip_ansi: remove ANSI CSI escape sequences + non-printable control
+  characters (including CR) from text. Preserves only \\t and \\n.
+  Known gap: OSC sequences (`ESC ] ... BEL`) are not yet matched and
+  will leave literal payload garbage after the control-char pass —
+  Phase 4 hardening covers this.
 - instruction_density: heuristic score (matches per 1000 chars) of phrases
   that look like prompt-injection instructions.
 - sanitize_for_ingest: applied by brain.write() to high-risk kinds; cleans

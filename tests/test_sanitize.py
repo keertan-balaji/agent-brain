@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from brain.sanitize import (
     instruction_density,
     sanitize_for_ingest,
@@ -48,6 +46,15 @@ def test_instruction_density_case_insensitive() -> None:
 
 def test_instruction_density_zero_on_empty() -> None:
     assert instruction_density("") == 0.0
+
+
+def test_sanitize_density_boundary_not_flagged_at_exactly_one() -> None:
+    # Threshold is strict (> 1.0). Exactly 1.0 must NOT flag.
+    phrase = "you are now"  # 11 chars, 1 match
+    padding = "x" * (1000 - len(phrase))  # density = 1 match per 1000 chars
+    src = SourceInput(kind="tool_call_output", content=phrase + padding, flags={})
+    out = sanitize_for_ingest(src)
+    assert "suspicious" not in out.flags
 
 
 def test_sanitize_skips_low_risk_kinds() -> None:

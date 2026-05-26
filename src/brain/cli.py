@@ -18,6 +18,7 @@ from brain.hooks.cli import hook as _hook_group
 from brain.migrate_v1 import migrate_v1_markdown
 from brain.obsidian.export import export_brain_to_markdown
 from brain.read import recall as _recall
+from brain.retrieval.render import quote_origin
 from brain.schemas import SourceInput
 from brain.write import write as _write
 
@@ -89,7 +90,8 @@ def recall(
     )
     table = Table("id", "kind", "score", "content (head)")
     for h in hits:
-        table.add_row(str(h.id), h.kind, f"{h.score:.3f}", h.content[:80])
+        head = quote_origin(h.kind, h.content[:80])
+        table.add_row(str(h.id), h.kind, f"{h.score:.3f}", head)
     console.print(table)
 
 

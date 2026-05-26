@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from brain.hooks.bundle import BundleSelection
+from brain.retrieval.render import quote_origin
 
 _VALID_TRIGGERS = ("pre_compact", "session_end", "manual")
 
@@ -62,9 +63,9 @@ def render_bundle(
 
     # Render sections in priority order; we drop from the tail when over budget.
     sections_in_priority: list[tuple[str, list[str]]] = [
-        ("Decisions", [f"[id={d['source_id']}] {d['head']}" for d in selection.decisions]),
-        ("Recent gotchas", [f"[id={g['source_id']}] {g['head']}" for g in selection.gotchas]),
-        ("Patterns", [f"[id={p['source_id']}] {p['head']}" for p in selection.patterns]),
+        ("Decisions", [f"[id={d['source_id']}] {quote_origin(d['kind'], d['head'])}" for d in selection.decisions]),
+        ("Recent gotchas", [f"[id={g['source_id']}] {quote_origin(g['kind'], g['head'])}" for g in selection.gotchas]),
+        ("Patterns", [f"[id={p['source_id']}] {quote_origin(p['kind'], p['head'])}" for p in selection.patterns]),
         (
             "Unresolved failures",
             [

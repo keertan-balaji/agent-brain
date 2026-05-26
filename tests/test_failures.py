@@ -121,3 +121,29 @@ def test_record_writes_sources_row_with_auto_flag_when_provided(pg_url: str) -> 
             text("SELECT flags FROM sources WHERE id = :i"), {"i": sid}
         ).scalar()
     assert flags["auto_flagged_by"] == "stop_hook"
+
+
+def test_record_preserves_prior_outcome_evidence_when_none_passed(pg_url: str) -> None:
+    engine = get_engine(pg_url)
+    # First record with concrete evidence.
+    fid1, _ = record(
+        engine,
+        target_problem="P_coalesce",
+        attempted_approach="A_coalesce",
+        outcome_evidence="original evidence",
+    )
+    # Re-occurrence with no evidence — COALESCE must keep the original.
+    fid2, n2 = record(
+        engine,
+        target_problem="P_coalesce",
+        attempted_approach="A_coalesce",
+        outcome_evidence=None,
+    )
+    assert fid2 == fid1
+    assert n2 == 2
+    with session_scope(engine) as s:
+        oe = s.execute(
+            text("SELECT outcome_evidence FROM failure_memories WHERE id = :i"),
+            {"i": fid1},
+        ).scalar()
+    assert oe == "original evidence"

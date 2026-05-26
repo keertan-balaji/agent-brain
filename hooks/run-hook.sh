@@ -12,11 +12,20 @@ set -uo pipefail
 EVENT="${1:-unknown}"
 
 if ! command -v brain >/dev/null 2>&1; then
-  # brain CLI not on PATH — emit empty additionalContext so SessionStart
-  # doesn't error. Other events ignore stdout, so the empty JSON is fine.
-  cat <<EOF
-{"hookSpecificOutput":{"hookEventName":"${EVENT}","additionalContext":""}}
-EOF
+  # brain CLI not on PATH — emit a schema-valid fallback envelope per event.
+  # Only SessionStart and UserPromptSubmit accept additionalContext in
+  # hookSpecificOutput; Stop / SessionEnd / PreCompact must not include it.
+  case "$EVENT" in
+    session-start)
+      echo '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":""}}'
+      ;;
+    user-prompt-submit)
+      echo '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":""}}'
+      ;;
+    *)
+      echo '{}'
+      ;;
+  esac
   exit 0
 fi
 

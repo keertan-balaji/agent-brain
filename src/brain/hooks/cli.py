@@ -50,6 +50,13 @@ def _emit_empty_output(event_name: str) -> None:
     click.echo(json.dumps({"hookSpecificOutput": {"hookEventName": event_name, "additionalContext": ""}}))
 
 
+def _emit_noop() -> None:
+    # Stop / SessionEnd / PreCompact hookSpecificOutput shapes do not accept
+    # additionalContext. Emit a minimal valid envelope so the harness schema
+    # validator passes.
+    click.echo("{}")
+
+
 @hook.command("session-start")
 @click.pass_context
 def session_start_cmd(ctx: click.Context) -> None:
@@ -110,7 +117,7 @@ def session_end_cmd(ctx: click.Context) -> None:
         ).scalar()
     if sid is not None:
         record_event(engine, session_id=sid, event_kind="session_end", payload={"reason": inp.reason})
-    _emit_empty_output("SessionEnd")
+    _emit_noop()
 
 
 @hook.command("user-prompt-submit")
@@ -136,7 +143,7 @@ def stop_cmd(ctx: click.Context) -> None:
         engine, cc_session_id=inp.session_id, cwd=inp.cwd, agent="claude-code", source="resume"
     )
     record_event(engine, session_id=sid, event_kind="stop", payload={"stop_hook_active": inp.stop_hook_active})
-    _emit_empty_output("Stop")
+    _emit_noop()
 
 
 @hook.command("pre-compact")

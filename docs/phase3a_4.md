@@ -53,16 +53,17 @@ To tune, edit the helper signature; no DB config exists for these (yet — Phase
 
 ## Strict mode
 
-Opt-in. Default off.
+Opt-in. Default off. Brain runs in Docker on `127.0.0.1:5433` — use TCP or `docker exec`, not bare `psql -d brain`.
 
-```sql
--- Enable
-INSERT INTO brain_config(key, value, updated_at)
-VALUES ('strict_mode', 'true', NOW())
-ON CONFLICT (key) DO UPDATE SET value = 'true';
+```bash
+# Enable
+PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c \
+  "INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW()) \
+   ON CONFLICT (key) DO UPDATE SET value = 'true';"
 
--- Disable
-UPDATE brain_config SET value = 'false', updated_at = NOW() WHERE key = 'strict_mode';
+# Disable
+PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c \
+  "UPDATE brain_config SET value = 'false', updated_at = NOW() WHERE key = 'strict_mode';"
 ```
 
 With strict mode on, the SessionEnd hook exits with code 2 when the session is under-captured. The harness surfaces non-zero exits as a system reminder in the next session.

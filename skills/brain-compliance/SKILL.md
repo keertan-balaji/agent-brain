@@ -26,13 +26,26 @@ bash skills/brain-compliance/scripts/compliance.sh list-thin [--limit N]
 
 ## Strict mode (opt-in)
 
-```sql
-INSERT INTO brain_config(key, value, updated_at)
-VALUES ('strict_mode', 'true', NOW())
-ON CONFLICT (key) DO UPDATE SET value = 'true';
+Brain runs in a Docker container exposed at `127.0.0.1:5433` — there's no host-side Postgres socket. Use one of these:
+
+```bash
+# Via TCP from the host
+PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c \
+  "INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW()) \
+   ON CONFLICT (key) DO UPDATE SET value = 'true';"
+
+# Or directly in the container
+docker exec -i brain-postgres psql -U brain -d brain -c \
+  "INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW()) \
+   ON CONFLICT (key) DO UPDATE SET value = 'true';"
 ```
 
-With strict mode on, the SessionEnd hook exits non-zero (code 2) when the session is under-captured. The next session's SessionStart hook surfaces this as a visible system reminder. Set `value = 'false'` to turn it back off.
+With strict mode on, the SessionEnd hook exits non-zero (code 2) when the session is under-captured. The next session's SessionStart hook surfaces this as a visible system reminder. To turn it back off:
+
+```bash
+PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c \
+  "UPDATE brain_config SET value = 'false', updated_at = NOW() WHERE key = 'strict_mode';"
+```
 
 ## Output budget
 

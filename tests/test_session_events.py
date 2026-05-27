@@ -23,14 +23,28 @@ def test_record_event_inserts_row(pg_url: str) -> None:
     assert rows[0].payload == {"prompt": "hello"}
 
 
-def test_record_event_rejects_bad_kind(pg_url: str) -> None:
-    import pytest
-    from sqlalchemy.exc import IntegrityError
+def test_record_event_accepts_arbitrary_kind(pg_url: str) -> None:
+    """The session_events_kind_check constraint was dropped in migration 013.
+
+    event_kind is now open-ended TEXT — adding a new event kind no longer
+    requires a migration. Producers are trusted to use sensible kind names.
+    """
+    from sqlalchemy import text as _text
 
     engine = get_engine(pg_url)
     sid = start_session(engine, cc_session_id="bad", cwd="/x", agent="cc", source="startup")
-    with pytest.raises(IntegrityError):
-        record_event(engine, session_id=sid, event_kind="bogus_kind", payload={})
+    record_event(engine, session_id=sid, event_kind="bogus_kind", payload={"x": 1})
+    with session_scope(engine) as s:
+        row = s.execute(
+            _text(
+                "SELECT event_kind, payload FROM session_events "
+                "WHERE session_id = :sid AND event_kind = 'bogus_kind'"
+            ),
+            {"sid": sid},
+        ).first()
+    assert row is not None
+    assert row.event_kind == "bogus_kind"
+    assert row.payload == {"x": 1}
 
 
 def test_record_event_default_payload_is_empty_dict(pg_url: str) -> None:

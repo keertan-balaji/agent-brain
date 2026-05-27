@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — v0.8.1 ships /brain slash command + using-agent-brain skill for active brain-usage discipline (recall before work, capture at breakpoints, pre-exit checklist).",
-  "version": "0.8.1",
+  "description": "Persistent cognition store for AI coding agents — v0.8.2 fixes psql-default-socket docs gap, TRUNCATE deadlock flake in tests, and drops the session_events.event_kind CHECK constraint so future kinds need no migration.",
+  "version": "0.8.2",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

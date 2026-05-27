@@ -22,7 +22,23 @@ Format per entry:
 
 ---
 
-## 2026-05-27 — [open] `psql -d brain` fails — DB runs in Docker on TCP-only, no local Unix socket
+## 2026-05-27 — [fixed-in-v0.8.2] Test suite wipes the dev `brain` database — TRUNCATE + alembic-downgrade-base ran against production data
+
+**Where:** `tests/conftest.py` `pg_url` default + `_apply_migrations` autouse fixture + `_truncate_tables`
+**Severity:** **critical** — silent data loss, user captures vanish on every full-suite run
+**Found via:** running pytest after capturing 3 sources (psql gotcha, slash-collision gotcha, strict_mode decision) — all 3 disappeared. `SELECT COUNT(*) FROM sources` dropped to 1 (residue from a test that didn't clean). `strict_mode` row also wiped by my new conftest cleanup.
+
+**Symptom:** Real brain captures, projects, sessions, failure_memories, retrieval_log — everything except `brain_config`-not-on-the-delete-list — gets nuked when the test suite runs. Pytest's session-scoped autouse fixture issues `alembic downgrade base` then `alembic upgrade head` on whatever `BRAIN_TEST_DB_URL` points at, and per-test `TRUNCATE ... CASCADE` runs afterward.
+
+**Root cause:** `pg_url` defaulted to `postgresql+psycopg://brain:brain_dev_password@127.0.0.1:5433/brain` — the same connection string the brain CLI uses for production data. No separate test DB ever existed; the assumption was the dev DB and test DB share the container but should have been distinct names.
+
+**Fix:** Default `BRAIN_TEST_DB_URL` is now `.../brain_test` (separate database on the same Postgres container). New `_ensure_test_db_exists` helper auto-creates `brain_test` via the `postgres` admin DB if missing, installs `vector` + `pg_trgm`, then migrations run against the isolated test DB. The dev `brain` DB is now untouched by the suite. Defensive runtime check refuses to run if the URL appears to still point at the dev DB.
+
+**Status:** fixed-in-v0.8.2 — `tests/conftest.py` overhaul. Anyone with prior captures should verify `SELECT COUNT(*) FROM sources` is intact before running the suite on this version.
+
+---
+
+## 2026-05-27 — [fixed-in-v0.8.2] `psql -d brain` fails — DB runs in Docker on TCP-only, no local Unix socket
 
 **Where:** any documentation or skill body that suggests `psql -d brain ...` for direct DB access
 **Severity:** low (user-visible friction; brain CLI works fine)
@@ -37,7 +53,7 @@ Format per entry:
 - `docker exec -it brain-postgres psql -U brain -d brain -c "..."`
 - `brain` CLI subcommands (already configured via `BRAIN_DB_URL` env or default)
 
-**Status:** open — fix docs in `skills/brain-compliance/SKILL.md`, `docs/operations.md`, and any other place suggesting bare `psql -d brain`.
+**Status:** fixed-in-v0.8.2 — docs updated in `skills/brain-compliance/SKILL.md`, `docs/operations.md`, and `docs/phase3a_4.md` to use TCP form or `docker exec`.
 
 ---
 
@@ -67,9 +83,9 @@ Format per entry:
 
 **Root cause:** The `_truncate_tables` fixture issues a session-scope `TRUNCATE ... CASCADE` after each test. If a hook subprocess from a prior test still holds row-level locks (e.g. a SELECT or INSERT inside a transaction that didn't commit before the test exited), the TRUNCATE blocks waiting for locks, then deadlocks against the next test's TRUNCATE.
 
-**Fix / workaround:** Re-run flakes. Real fix would be either (a) make `_truncate_tables` retry on deadlock with a small backoff, or (b) explicitly `wait` on subprocess pids before tearing down. Pre-existing — not introduced by 3a-4.
+**Fix / workaround:** v0.8.2 wraps the truncate in a 5-attempt retry loop with exponential backoff on `OperationalError` matching `deadlock|lock timeout|statement timeout`. Each attempt is bounded by a 3-second `statement_timeout` so a stuck lock can't hang the whole suite. Also added the missing `session_events` table to the TRUNCATE list (latent bug from 3a-1).
 
-**Status:** open — pre-existing test-infra issue. Not blocking merge.
+**Status:** fixed-in-v0.8.2.
 
 ---
 
@@ -99,9 +115,9 @@ Format per entry:
 
 **Root cause:** Migration 010 hard-coded the kind allowlist as a CHECK constraint. Future phases adding new kinds must migrate.
 
-**Fix:** Migration 011 drops + recreates the constraint with `under_captured` added. Task 4 needs another migration (012) to add `thin_session`.
+**Fix:** Migration 011 added `under_captured`; migration 012 added `thin_session`. Migration 013 (v0.8.2) **drops the constraint entirely** — `event_kind` is now open-ended TEXT. Future event kinds require no migration. Trade-off: misspellings won't be caught at INSERT time, but the upside of no migration-per-kind outweighs the typo risk (which only producers can introduce, and we control all of them).
 
-**Status:** partial — `under_captured` added in 011. `thin_session` lands in Task 4 / migration 012. Any future event kind requires a migration; consider relaxing the CHECK or moving the allowlist into a lookup table in Phase 4.
+**Status:** fixed-in-v0.8.2 — constraint dropped via migration 013.
 
 ---
 

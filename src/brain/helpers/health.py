@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import Engine, text
 
+from brain.compliance import under_captured_sessions
 from brain.db import session_scope
 
 
@@ -55,27 +56,6 @@ def audit(engine: Engine, *, undercapture_threshold: int = 3) -> HealthReport:
             n = s.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             report.table_row_counts[table] = int(n or 0)
 
-        rows = s.execute(
-            text(
-                """
-                SELECT sess.id, sess.project_id, COUNT(ev.id) AS event_count
-                FROM sessions sess
-                LEFT JOIN events ev ON ev.session_id = sess.id
-                WHERE sess.ended_at IS NOT NULL
-                GROUP BY sess.id, sess.project_id
-                HAVING COUNT(ev.id) > 0 AND COUNT(ev.id) < :thresh
-                ORDER BY sess.ended_at DESC
-                """
-            ),
-            {"thresh": undercapture_threshold},
-        ).fetchall()
-        report.undercaptured_sessions = [
-            UndercapturedSession(
-                session_id=r[0], project_id=r[1], event_count=int(r[2])
-            )
-            for r in rows
-        ]
-
         orphan = s.execute(
             text(
                 "SELECT COUNT(*) FROM memory_classifications mc "
@@ -117,5 +97,23 @@ def audit(engine: Engine, *, undercapture_threshold: int = 3) -> HealthReport:
             report.tau_rolling_ratios[bucket] = (
                 float(ratio) if ratio is not None else None
             )
+
+    # Delegate to compliance helper which uses session_events (turn count) and
+    # sources (substantive captures) — the correct surfaces for Claude Code sessions.
+    # event_count now holds the substantive capture count (not events.id rows).
+    rows = under_captured_sessions(
+        engine,
+        turn_threshold=5,
+        capture_threshold=undercapture_threshold,
+        limit=50,
+    )
+    report.undercaptured_sessions = [
+        UndercapturedSession(
+            session_id=r.session_id,
+            project_id=r.project_id,
+            event_count=r.capture_count,
+        )
+        for r in rows
+    ]
 
     return report

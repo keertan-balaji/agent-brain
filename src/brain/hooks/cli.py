@@ -11,6 +11,7 @@ import click
 from sqlalchemy import text
 
 from brain import failures
+from brain.compliance import is_strict_mode, is_under_captured, session_capture_stats
 from brain.db import session_scope
 from brain.hooks.bundle import gather_bundle_selection
 from brain.hooks.transcript_scan import scan_for_failures
@@ -120,6 +121,32 @@ def session_end_cmd(ctx: click.Context) -> None:
         ).scalar()
     if sid is not None:
         record_event(engine, session_id=sid, event_kind="session_end", payload={"reason": inp.reason})
+
+        # Phase 3a-4: compliance check.
+        try:
+            stats = session_capture_stats(engine, session_id=int(sid))
+            if is_under_captured(stats):
+                record_event(
+                    engine, session_id=int(sid), event_kind="under_captured",
+                    payload={
+                        "turn_count": stats.turn_count,
+                        "capture_count": stats.capture_count,
+                        "decision_count": stats.decision_count,
+                        "gotcha_count": stats.gotcha_count,
+                        "subtask_summary_count": stats.subtask_summary_count,
+                    },
+                )
+                if is_strict_mode(engine):
+                    _emit_noop()
+                    ctx.exit(2)
+        except (SystemExit, click.exceptions.Exit):
+            raise  # ctx.exit raises click.exceptions.Exit; do NOT swallow via bare Exception
+        except Exception as exc:  # noqa: BLE001 — hook must be non-fatal
+            record_event(
+                engine, session_id=int(sid), event_kind="hook_error",
+                payload={"hook": "session_end", "error": str(exc)[:500]},
+            )
+
     _emit_noop()
 
 

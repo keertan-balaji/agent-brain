@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — v0.8.2 fixes psql-default-socket docs gap, TRUNCATE deadlock flake in tests, and drops the session_events.event_kind CHECK constraint so future kinds need no migration.",
-  "version": "0.8.2",
+  "description": "Persistent cognition store for AI coding agents — v0.8.3 wires the hybrid retrieval stack (FTS + BGE-M3 + RRF + cross-encoder rerank) into the default `brain recall` CLI, auto-picks bge-reranker-v2-m3 on ≤6GB GPUs (Option G), calibrates per-reranker tau abstain, and adds `brain ingest backfill` for embedding missing captures. A/B eval: hit@5 25% → 100%.",
+  "version": "0.8.3",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

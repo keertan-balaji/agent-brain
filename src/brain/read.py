@@ -224,7 +224,12 @@ def recall(
         pre_tau = [(h.doc_id, h.score) for h in reranked]
         candidate_records = [{"id": d, "score": s, "stage": "rerank"} for d, s in pre_tau]
 
-    post_tau = _tau_or_abstain(pre_tau, buckets=buckets, tau=tau)
+    # Per-reranker default tau (different rerankers output different score scales).
+    # Only fall back to bucket-based default if no reranker is in play.
+    effective_tau = tau
+    if effective_tau is None and reranker is not None:
+        effective_tau = getattr(reranker, "DEFAULT_TAU", None)
+    post_tau = _tau_or_abstain(pre_tau, buckets=buckets, tau=effective_tau)
     hits = _hydrate(engine, post_tau)
 
     # Compute provenance ratios over the actual hits (use already-loaded prov when possible).

@@ -94,7 +94,7 @@ Format per entry:
 
 **Anthropic's promised 49% retrieval-failure reduction requires LLM-generated per-chunk context** (specifically "what this chunk is about" sentences), not deterministic heuristic. That needs the agent-driven prepare-contexts / finalize-contexts flow with an agent in the loop — out of scope for an automated backfill.
 
-**Status:** partial-fix-in-v0.8.4 (heuristic). Full LLM-driven contextual ingest deferred to a Phase 3b task that wires the agent-driven flow into a single-command CLI wrapper.
+**Status v0.8.5 update:** partial-fix still stands for the embedding path. `brain ingest backfill` now emits an actionable hint listing multi-chunk source IDs and pointing at the `agent-brain:brain-ingest-contextual` skill for LLM-driven per-chunk contexts. Full automation (LLM-generated contexts in a single CLI invocation, no agent-in-loop) would require an external API dep; spec deliberately removed that. The agent-driven path via the skill IS the supported workflow — closing this entry depends on the skill becoming reflexive enough that it runs after every multi-chunk ingest. That's a discipline issue more than a code issue at this point.
 
 ---
 
@@ -227,25 +227,33 @@ Env override: `BRAIN_AUTO_EMBED=false` disables globally even when caller passes
 
 **Root cause:** `brain_config` is intentionally excluded from `_truncate_tables` to preserve seeded constants. Tests that mutate it must self-clean.
 
-**Fix:** Tests that toggle `strict_mode` explicitly reset to 'false' at the end, OR use a per-test fixture that records and restores prior state.
+**Fix:** v0.8.2 conftest `_truncate_tables` now resets `strict_mode` to seed default ('false') after every test via an explicit `UPDATE brain_config SET value = 'false' WHERE key = 'strict_mode' AND value <> 'false'`. `brain_config` is still excluded from the bulk TRUNCATE so seeded constants survive, but transient/testable rows are reset.
 
-**Status:** worked around in `test_hook_session_end_compliance.py`. Phase 3a-4 Task 9 docs note this as a testing convention.
+**Status:** fixed-in-v0.8.2 — conftest `_truncate_tables` resets strict_mode after each test.
 
 ---
 
-## 2026-05-27 — [open] Stop-hook false-positive rate ~66% on smoke-test session
+## 2026-05-27 — [fixed-in-v0.8.5] Stop-hook false-positive rate ~66% on smoke-test session
 
 **Where:** Stop hook → `transcript_scan.py` → `failures.record`
 **Severity:** medium
-**Found via:** Phase 3a-2 live verification. Single test session produced 3 auto-flagged failures; 1 legit (a `git push` 403), 2 spurious (`brain --version` — option doesn't exist but the command otherwise succeeds; chained `git status; git log; git tag | head` where the head pipe likely returned non-zero on EOF).
+**Found via:** Phase 3a-2 live verification. Single test session produced 3 auto-flagged failures; 1 legit (a `git push` 403), 2 spurious (`brain --version` — option doesn't exist but the command otherwise succeeds; chained `git status; git log; git tag | head` where the head pipe likely returned non-zero on EOF). Later sessions showed `<ide_opened_file>` system markers being captured as `target_problem`, recursive `brain X` calls auto-flagging themselves, and `Usage:` / `Try '... --help'` errors flooding `brain failure list`.
 
 **Symptom:** Every Bash that returns is_error=true OR emits "Error:" / "Traceback" / "FAILED" anywhere gets flagged. Trivial CLI usage errors (unknown flag, no-match grep, head-on-tiny-output) fire alongside real failures.
 
-**Root cause:** Heuristic is intentionally broad per spec § "Sanitization at ingest" Phase-2 minimum. Refinement is deferred to Phase 4. Documented in `docs/phase3a_2.md` Known Limitations.
+**Root cause:** Heuristic was intentionally broad per spec § "Sanitization at ingest" Phase-2 minimum. Spec deferred refinement to Phase 4. In practice the noise drowned signal in `brain failure list`.
 
-**Fix / workaround:** Manual `brain failure invalidate <id> --reason ...`. Phase 3a-4 adds compliance counters that surface noise volume; Phase 4 owns heuristic refinement.
+**Fix v0.8.5:** `_is_noise()` filter in `transcript_scan.py` skips candidates matching any of:
+1. `target_problem` starts with system markers (`<ide_opened_file>`, `<system-reminder>`, `<task-notification>`, `<command-message>`, `<command-name>`) — those are harness/IDE injections, never real targets.
+2. Empty / whitespace-only `target_problem`.
+3. `attempted_approach` invokes a blocklisted agent-internal tool (`TodoWrite`, `Skill`, `AskUserQuestion`, `ToolSearch`, `TaskStop`, `ScheduleWakeup`, `PushNotification`).
+4. Bash invocations of the `brain` CLI itself (self-recursion — agent calling brain to record failures shouldn't auto-flag those brain calls).
+5. CLI usage errors (`Usage: ...`, `Try '... --help'`, `Error: Missing|Invalid|No such (option|command|argument)`) — agent flag-syntax mistakes, not real failures.
+6. Outcome evidence <20 chars with no Traceback/Error/FATAL/FAILED/Exit code signature — covers `grep` no-match, empty-pipe exit codes.
 
-**Status:** open — wontfix until Phase 4
+Real failures (Traceback, compile errors, build failures, semantic errors with substantive evidence) still pass through unchanged. 7 new tests in `tests/test_transcript_scan.py` cover each filter.
+
+**Status:** fixed-in-v0.8.5. Heuristic FP should drop from ~66% to <10% on typical sessions. Manual `brain failure invalidate` remains for the residual false positives.
 
 ---
 
@@ -291,6 +299,6 @@ Env override: `BRAIN_AUTO_EMBED=false` disables globally even when caller passes
 
 **Root cause:** The audit LEFT JOINs `sessions` to the `events` table (canonical subtask-scoped episodic stream). Claude Code sessions never write to `events` — they write to `session_events` (hooks) and `sources` (substantive captures via `brain.write`). The HAVING clause's `COUNT(ev.id) > 0` then filters out every real Claude Code session.
 
-**Fix / workaround:** Phase 3a-4 Task 2 rewrites the query to delegate to `compliance.under_captured_sessions`, which counts `session_events.user_prompt_submit` for turn count and `sources WHERE kind IN capture-worthy AND created_at within session window` for capture count.
+**Fix:** Phase 3a-4 Task 2 (commit 2f96ef8) rewrote the query to delegate to `compliance.under_captured_sessions`, which counts `session_events.user_prompt_submit` for turn count and `sources WHERE kind IN capture-worthy AND created_at within session window` for capture count. `tests/test_health.py` was updated to seed `session_events` instead of the old `events` table.
 
-**Status:** tracked — fix lands in Phase 3a-4 Task 2.
+**Status:** fixed-in-v0.7.0 (commit 2f96ef8).

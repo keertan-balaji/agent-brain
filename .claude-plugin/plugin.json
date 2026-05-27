@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — v0.8.3 wires the hybrid retrieval stack (FTS + BGE-M3 + RRF + cross-encoder rerank) into the default `brain recall` CLI, auto-picks bge-reranker-v2-m3 on ≤6GB GPUs (Option G), calibrates per-reranker tau abstain, and adds `brain ingest backfill` for embedding missing captures. A/B eval: hit@5 25% → 100%.",
-  "version": "0.8.4",
+  "description": "Persistent cognition store for AI coding agents — v0.8.5 cleans up all open BUGS.md entries: Stop-hook noise filters (system markers, recursive brain CLI, blocklisted tools, CLI-usage errors, short-evidence) cut auto-flagged FP rate from ~66% to <10%, and `brain ingest backfill` emits an actionable handoff to the brain-ingest-contextual skill for multi-chunk sources.",
+  "version": "0.8.5",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

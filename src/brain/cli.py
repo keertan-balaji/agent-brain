@@ -12,6 +12,7 @@ from rich.table import Table
 
 from brain.config import load_config
 from brain.db import get_engine
+from brain import compliance as _compliance
 from brain import failures as _failures
 from brain.helpers.entity_timeline import entity_timeline as _entity_timeline
 from brain.helpers.health import audit as _audit
@@ -845,6 +846,76 @@ def failure_invalidate(
     """Mark a failure as superseded (it no longer applies)."""
     _failures.invalidate(ctx.obj["engine"], failure_id=failure_id, reason=reason)
     click.echo(f"invalidated failure_id={failure_id}")
+
+
+@main.group()
+def compliance() -> None:
+    """Compliance audits (under-captured sessions + thin bundles)."""
+
+
+@compliance.command("check")
+@click.option("--session-id", type=int, required=True)
+@click.pass_context
+def compliance_check(ctx: click.Context, session_id: int) -> None:
+    """Print capture stats + verdict for one session."""
+    stats = _compliance.session_capture_stats(ctx.obj["engine"], session_id=session_id)
+    verdict = _compliance.is_under_captured(stats)
+    click.echo(
+        f"session_id={stats.session_id} "
+        f"turn_count={stats.turn_count} "
+        f"capture_count={stats.capture_count} "
+        f"decision_count={stats.decision_count} "
+        f"gotcha_count={stats.gotcha_count} "
+        f"failure_count={stats.failure_count} "
+        f"under_captured={verdict}"
+    )
+
+
+@compliance.command("list")
+@click.option("--limit", type=int, default=20)
+@click.pass_context
+def compliance_list(ctx: click.Context, limit: int) -> None:
+    """List recent under-captured sessions (most recent first)."""
+    rows = _compliance.under_captured_sessions(ctx.obj["engine"], limit=limit)
+    if not rows:
+        click.echo("(no under-captured sessions)")
+        return
+    for r in rows:
+        click.echo(
+            f"[{r.session_id}] cc={r.cc_session_id or '-'} "
+            f"project={r.project_id or '-'} "
+            f"turns={r.turn_count} captures={r.capture_count}"
+        )
+
+
+@compliance.command("list-thin")
+@click.option("--limit", type=int, default=20)
+@click.pass_context
+def compliance_list_thin(ctx: click.Context, limit: int) -> None:
+    """List sessions with at least one thin_session event."""
+    from sqlalchemy import text as _text
+    from brain.db import session_scope as _scope
+
+    with _scope(ctx.obj["engine"]) as s:
+        rows = s.execute(
+            _text(
+                "SELECT DISTINCT ON (se.session_id) "
+                "  se.session_id, se.occurred_at, se.payload, sess.cc_session_id, sess.project_id "
+                "FROM session_events se JOIN sessions sess ON sess.id = se.session_id "
+                "WHERE se.event_kind = 'thin_session' "
+                "ORDER BY se.session_id, se.occurred_at DESC "
+                "LIMIT :n"
+            ),
+            {"n": limit},
+        ).all()
+    if not rows:
+        click.echo("(no thin sessions)")
+        return
+    for r in rows:
+        click.echo(
+            f"[{r.session_id}] cc={r.cc_session_id or '-'} "
+            f"project={r.project_id or '-'} at={r.occurred_at:%Y-%m-%d %H:%M}"
+        )
 
 
 main.add_command(_hook_group)

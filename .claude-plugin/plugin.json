@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — Phase 3a-4 adds the compliance subsystem (under-captured session detection, thin-session flagging, opt-in strict_mode).",
-  "version": "0.7.0",
+  "description": "Persistent cognition store for AI coding agents — v0.8.0 adds /using-agent-brain skill + slash command for active brain-usage discipline (recall before work, capture at breakpoints, pre-exit checklist).",
+  "version": "0.8.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

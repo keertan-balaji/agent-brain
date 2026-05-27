@@ -82,6 +82,63 @@ def _load_source(engine: Engine, source_id: int) -> tuple[str, str, int | None]:
     return row[0], row[1], row[2]
 
 
+def _load_source_with_uri(engine: Engine, source_id: int) -> tuple[str, str, int | None, str | None]:
+    with session_scope(engine) as s:
+        row = s.execute(
+            text(
+                "SELECT kind, content, project_id, uri FROM sources "
+                "WHERE id = :id AND t_valid_to IS NULL"
+            ),
+            {"id": source_id},
+        ).one()
+    return row[0], row[1], row[2], row[3]
+
+
+def _nearest_markdown_header(parent_content: str, span_start: int) -> str | None:
+    """For a chunk starting at span_start, walk backwards in the parent content
+    to find the nearest preceding '#' / '##' / '###' header line."""
+    if span_start <= 0:
+        return None
+    prefix = parent_content[:span_start]
+    # Iterate lines in reverse, return the first that looks like a markdown header.
+    for line in reversed(prefix.splitlines()):
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            # Strip leading '#' marks and whitespace; cap length.
+            header = stripped.lstrip("#").strip()
+            if header:
+                return header[:120]
+    return None
+
+
+def heuristic_contexts(
+    parent_content: str,
+    chunks,
+    *,
+    parent_kind: str,
+    parent_uri: str | None,
+) -> list[str]:
+    """Generate deterministic per-chunk context prefixes for multi-chunk sources.
+
+    Strategy:
+      - Always prepend a source-level tag: "[From <kind>[ at <uri>]]"
+      - For chunks landing inside markdown content, append the nearest preceding
+        section header: "[Section: <header>]"
+      - The same source-level tag repeats across chunks (cheap framing); the
+        section header provides per-chunk disambiguation.
+
+    Cheap, no LLM. For higher-quality per-chunk summaries use the agent-driven
+    prepare-contexts / finalize-contexts flow (Phase 2.5).
+    """
+    source_tag = f"[From {parent_kind}{f' at {parent_uri}' if parent_uri else ''}]"
+    contexts: list[str] = []
+    for ch in chunks:
+        header = _nearest_markdown_header(parent_content, ch.span_start)
+        section_tag = f" [Section: {header}]" if header else ""
+        contexts.append(f"{source_tag}{section_tag}")
+    return contexts
+
+
 def _insert_chunks_and_embeddings(
     engine: Engine,
     *,
@@ -161,13 +218,33 @@ def ingest_source(
     embedder: BgeM3Embedder,
     child_max_tokens: int = 256,
     parent_max_tokens: int = 1024,
+    contextual: bool = True,
 ) -> IngestSummary:
-    parent_kind, parent_content, parent_project_id = _load_source(engine, source_id)
+    """Chunk + embed a source.
+
+    contextual=True (default): when the chunker emits >1 chunks, prepend a
+    deterministic heuristic context to each chunk before embedding — source-kind
+    tag plus the nearest preceding markdown header. Single-chunk sources skip
+    contextual (chunk == whole doc, nothing to disambiguate). This is the cheap
+    contextual variant; for LLM-generated per-chunk summaries use the agent-
+    driven prepare-contexts / finalize-contexts flow.
+    """
+    parent_kind, parent_content, parent_project_id, parent_uri = _load_source_with_uri(
+        engine, source_id
+    )
     chunks = chunk_document(
         parent_content,
         child_max_tokens=child_max_tokens,
         parent_max_tokens=parent_max_tokens,
     )
+    contexts: list[str] | None = None
+    if contextual and len(chunks) > 1:
+        contexts = heuristic_contexts(
+            parent_content,
+            chunks,
+            parent_kind=parent_kind,
+            parent_uri=parent_uri,
+        )
     return _insert_chunks_and_embeddings(
         engine,
         source_id=source_id,
@@ -176,7 +253,7 @@ def ingest_source(
         parent_content=parent_content,
         embedder=embedder,
         chunks=chunks,
-        contexts=None,
+        contexts=contexts,
     )
 
 

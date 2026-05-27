@@ -42,8 +42,14 @@ def record(
     outcome_evidence: str | None = None,
     project_id: int | None = None,
     auto_flagged_by: str | None = None,
+    auto_embed: bool = False,
 ) -> tuple[int, int]:
-    """Upsert a failure_memories row. Returns (failure_id, retry_count_after)."""
+    """Upsert a failure_memories row. Returns (failure_id, retry_count_after).
+
+    auto_embed=True: embed the backing sources row immediately so it's
+    retrievable via hybrid recall. CLI-invoked records pass True;
+    Stop-hook-invoked auto-flags pass False (they're high-volume and
+    skip the embedder load tax — backfill catches them up if needed)."""
     flags: dict[str, object] = {}
     if auto_flagged_by:
         flags["auto_flagged_by"] = auto_flagged_by
@@ -55,7 +61,7 @@ def record(
         project_id=project_id,
         flags=flags,
     )
-    src_result = write(engine, src_input)
+    src_result = write(engine, src_input, auto_embed=auto_embed)
 
     with session_scope(engine) as s:
         row = s.execute(

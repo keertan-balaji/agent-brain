@@ -52,7 +52,7 @@ def write(
     project_id: int | None,
     bucket: tuple[str, ...],
 ) -> None:
-    """Capture a source into the brain."""
+    """Capture a source into the brain. Substantive kinds auto-embed (v0.8.4)."""
     result = _write(
         ctx.obj["engine"],
         SourceInput(
@@ -62,6 +62,7 @@ def write(
             project_id=project_id,
             buckets=list(bucket),  # type: ignore[arg-type]
         ),
+        auto_embed=True,
     )
     click.echo(json.dumps(result.model_dump()))
 
@@ -777,6 +778,7 @@ def decide(ctx: click.Context, title: str, project: str) -> None:
             content=body,
             buckets=["semantic"],
         ),
+        auto_embed=True,
     )
     click.echo(json.dumps(result.model_dump()))
 
@@ -883,6 +885,7 @@ def promote_answer(ctx: click.Context, cache_key_hex: str, kind: str, yes: bool)
             content=body,
             provenance_kind="synthesized",
         ),
+        auto_embed=True,
     )
     click.echo(json.dumps(result.model_dump()))
 
@@ -918,13 +921,17 @@ def failure_record(
     outcome_evidence: str | None,
     project_id: int | None,
 ) -> None:
-    """Record a failure attempt. Dedup on (target-problem, attempted-approach)."""
+    """Record a failure attempt. Dedup on (target-problem, attempted-approach).
+
+    CLI-driven records auto-embed (v0.8.4). The Stop hook's auto-flagged
+    failures skip auto-embed (high-volume; `brain ingest backfill` catches up)."""
     fid, n = _failures.record(
         ctx.obj["engine"],
         target_problem=target_problem,
         attempted_approach=attempted_approach,
         outcome_evidence=outcome_evidence,
         project_id=project_id,
+        auto_embed=True,
     )
     click.echo(f"failure_id={fid} retry_count={n}")
 

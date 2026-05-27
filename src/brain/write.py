@@ -6,10 +6,12 @@ Implements:
 - generation_depth computation for provenance discipline (max=3, depth-4 rejected)
 - FTS row materialization (sources_fts)
 - optional memory_classifications inserts
+- opt-in auto-embedding for substantive kinds (v0.8.4)
 """
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy import Engine, text
@@ -18,6 +20,27 @@ from brain.content_hash import sha256_bytes
 from brain.db import session_scope
 from brain.sanitize import sanitize_for_ingest
 from brain.schemas import SourceInput, WriteResult
+
+
+# Kinds whose content is substantive enough to warrant immediate embedding.
+# Hook-driven captures (tool_call_output, command) are high-volume + low-retrieval-value;
+# they pay a 3s embedder-load tax per CLI subprocess so they stay opt-out.
+_SUBSTANTIVE_KINDS: frozenset[str] = frozenset({
+    "decision", "gotcha", "pattern", "note",
+    "subtask_summary", "session_summary", "faq",
+})
+
+# Module-level lazy embedder cache. First call inside a Python process pays the
+# ~3s BGE-M3 load; subsequent calls reuse the cached instance.
+_embedder_cache: object | None = None
+
+
+def _get_embedder():
+    global _embedder_cache
+    if _embedder_cache is None:
+        from brain.embed.bge_m3 import BgeM3Embedder
+        _embedder_cache = BgeM3Embedder()
+    return _embedder_cache
 
 
 def _compute_generation_depth(
@@ -37,10 +60,23 @@ def _compute_generation_depth(
     return 1 + max(r[0] for r in rows)
 
 
-def write(engine: Engine, source: SourceInput) -> WriteResult:
+def write(
+    engine: Engine,
+    source: SourceInput,
+    *,
+    auto_embed: bool = False,
+) -> WriteResult:
     """Insert a source, dedup-scoped to (kind, uri, content_hash) within active rows.
 
     Returns the resulting source_id and whether a new row was created.
+
+    auto_embed: when True AND the kind is substantive (decision/gotcha/pattern/
+    note/subtask_summary/session_summary/faq), automatically chunk + embed the
+    source via brain.ingest.ingest_source so the capture is immediately
+    retrievable via hybrid recall. Default False so hook-driven high-volume
+    captures (tool_call_output, command, etc.) don't pay the embedder load tax.
+    Env override: BRAIN_AUTO_EMBED=false disables globally even when caller
+    passes True. Idempotent — skipped if the source already has embeddings.
     """
     source = sanitize_for_ingest(source)  # Phase 3a-2: ANSI strip + suspicious-flag for high-risk kinds
     depth = _compute_generation_depth(
@@ -122,7 +158,33 @@ def write(engine: Engine, source: SourceInput) -> WriteResult:
                 {"s": sid, "b": bucket, "c": source.classifier},
             )
 
+    # Phase v0.8.4: auto-embed substantive captures so they're immediately retrievable.
+    if auto_embed and source.kind in _SUBSTANTIVE_KINDS and os.environ.get("BRAIN_AUTO_EMBED", "true") != "false":
+        _maybe_auto_embed(engine, source_id=sid)
+
     return WriteResult(source_id=sid, created=True, generation_depth=depth)
+
+
+def _maybe_auto_embed(engine: Engine, *, source_id: int) -> None:
+    """Idempotent auto-embed. Skips if the source (or any of its children) already
+    has an embedding row. Errors are swallowed (capture must succeed even if embed fails)."""
+    with session_scope(engine) as s:
+        already = s.execute(
+            text(
+                "SELECT 1 FROM embeddings_1024 e "
+                "JOIN sources child ON child.id = e.source_id "
+                "WHERE child.parent_id = :sid OR child.id = :sid "
+                "LIMIT 1"
+            ),
+            {"sid": source_id},
+        ).scalar()
+    if already:
+        return
+    try:
+        from brain.ingest import ingest_source
+        ingest_source(engine, source_id=source_id, embedder=_get_embedder())
+    except Exception:  # noqa: BLE001 — capture must not fail because embedding failed
+        pass
 
 
 def invalidate(engine: Engine, source_id: int, *, reason: str) -> None:

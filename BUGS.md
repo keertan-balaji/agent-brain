@@ -22,6 +22,22 @@ Format per entry:
 
 ---
 
+## 2026-05-27 — [open] Test deadlock race: `_truncate_tables` fixture vs subprocess hook tests
+
+**Where:** `tests/conftest.py` `_truncate_tables` fixture interacting with subprocess-based hook e2e tests
+**Severity:** low (flaky; passes on retry)
+**Found via:** Phase 3a-4 final-review full-suite run (16 fails + 3 errors first run, 243 passing second run — same suite, no code change).
+
+**Symptom:** Random tests fail with `sqlalchemy.exc.OperationalError: DeadlockDetected` mid-truncate. Always involves a subprocess hook test (`brain hook stop` / `brain hook session-end`) running concurrently with `_truncate_tables`.
+
+**Root cause:** The `_truncate_tables` fixture issues a session-scope `TRUNCATE ... CASCADE` after each test. If a hook subprocess from a prior test still holds row-level locks (e.g. a SELECT or INSERT inside a transaction that didn't commit before the test exited), the TRUNCATE blocks waiting for locks, then deadlocks against the next test's TRUNCATE.
+
+**Fix / workaround:** Re-run flakes. Real fix would be either (a) make `_truncate_tables` retry on deadlock with a small backoff, or (b) explicitly `wait` on subprocess pids before tearing down. Pre-existing — not introduced by 3a-4.
+
+**Status:** open — pre-existing test-infra issue. Not blocking merge.
+
+---
+
 ## 2026-05-27 — [fixed-in-e49f704] `ctx.exit()` raises `click.exceptions.Exit`, not `SystemExit`
 
 **Where:** Click 8.x context exit semantics; affects any hook handler using `ctx.exit(n)` for non-zero exits

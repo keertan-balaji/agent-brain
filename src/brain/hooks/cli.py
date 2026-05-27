@@ -213,10 +213,18 @@ def pre_compact_cmd(ctx: click.Context) -> None:
     )
 
     sel = gather_bundle_selection(engine, session_id=sid, cwd=inp.cwd, limit_per_kind=10)
-    if is_thin_bundle(sel):
+    # Phase 3a-4: thin-session flag is non-fatal — must not prevent bundle persistence
+    # if record_event fails (e.g. unmigrated DB without 'thin_session' in event_kind allowlist).
+    try:
+        if is_thin_bundle(sel):
+            record_event(
+                engine, session_id=sid, event_kind="thin_session",
+                payload={"cwd": inp.cwd, "trigger": "pre_compact"},
+            )
+    except Exception as exc:  # noqa: BLE001 — hook must be non-fatal
         record_event(
-            engine, session_id=sid, event_kind="thin_session",
-            payload={"cwd": inp.cwd, "trigger": "pre_compact"},
+            engine, session_id=sid, event_kind="hook_error",
+            payload={"hook": "pre_compact", "error": str(exc)[:500]},
         )
     rendered = render_bundle(
         sel,

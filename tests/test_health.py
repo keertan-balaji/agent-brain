@@ -16,6 +16,8 @@ def test_audit_reports_table_sizes(pg_url: str) -> None:
 
 
 def test_audit_lists_undercaptured_sessions(pg_url: str) -> None:
+    # Updated for Phase 3a-4: audit now uses session_events (turn count) and
+    # sources (capture count) instead of the events table.
     engine = get_engine(pg_url)
     with session_scope(engine) as s:
         pid = s.execute(
@@ -30,13 +32,16 @@ def test_audit_lists_undercaptured_sessions(pg_url: str) -> None:
             ),
             {"p": pid},
         ).scalar()
-        # Add 1 event (below threshold=3, above 0) so the under-captured check fires.
-        # Zero-event sessions are the Phase 1 baseline (no hook capture) and would
-        # otherwise flood the audit; the query now requires > 0 events.
-        s.execute(
-            text("INSERT INTO events(session_id, ordinal, kind) VALUES (:s, 1, 'reflection')"),
-            {"s": sess_id},
-        )
+        # Add 6 user_prompt_submit turns (>= turn_threshold=5) with zero captures,
+        # so the compliance helper flags this session as under-captured.
+        for _ in range(6):
+            s.execute(
+                text(
+                    "INSERT INTO session_events(session_id, event_kind, payload) "
+                    "VALUES (:s, 'user_prompt_submit', '{}'::jsonb)"
+                ),
+                {"s": sess_id},
+            )
     report = audit(engine, undercapture_threshold=3)
     assert sess_id in [row.session_id for row in report.undercaptured_sessions]
 

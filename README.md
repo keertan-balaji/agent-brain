@@ -253,7 +253,30 @@ brain failure invalidate <id> --reason "..."
 
 Operations: `docs/phase3a_2.md`. Plan: `docs/superpowers/plans/2026-05-26-agent-brain-v2-phase-3a-2.md`.
 
-Follow-on plans queued: 3a-3 (file watcher), 3a-4 (compliance subsystem).
+## Agent Brain v2 — Phase 3a-4
+
+Phase 3a-4 ships the compliance subsystem. The SessionEnd hook now computes a per-session capture-completeness check; sessions with ≥5 user prompts and <3 substantive captures get an `under_captured` event recorded. The PreCompact hook flags `thin_session` bundles (no decisions / gotchas / failures / open subtasks). Optional strict mode (`brain_config.strict_mode='true'`) makes SessionEnd exit non-zero on under-captured sessions, surfacing a system reminder in the next session. The pre-existing `brain health` audit query (which counted the wrong table and reported zero under-captured sessions for every Claude Code session) is fixed.
+
+```bash
+git pull && alembic upgrade head    # migrations 011 + 012 (event_kind allowlist)
+/reload-plugins
+```
+
+New skill + CLI:
+
+| Skill | When to use |
+|---|---|
+| `brain-compliance` | Inspect a session's capture stats, audit recent under-captured / thin sessions, toggle strict mode |
+
+```bash
+brain compliance check --session-id <N>
+brain compliance list [--limit N]
+brain compliance list-thin [--limit N]
+```
+
+Operations: `docs/phase3a_4.md`. Plan: `docs/superpowers/plans/2026-05-27-agent-brain-v2-phase-3a-4.md`.
+
+Follow-on plan queued: 3a-3 (file watcher).
 
 ## Design docs
 

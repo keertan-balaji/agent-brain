@@ -11,6 +11,7 @@ import click
 from sqlalchemy import text
 
 from brain import failures
+from brain.compliance import is_strict_mode, is_thin_bundle, is_under_captured, session_capture_stats
 from brain.db import session_scope
 from brain.hooks.bundle import gather_bundle_selection
 from brain.hooks.transcript_scan import scan_for_failures
@@ -120,6 +121,32 @@ def session_end_cmd(ctx: click.Context) -> None:
         ).scalar()
     if sid is not None:
         record_event(engine, session_id=sid, event_kind="session_end", payload={"reason": inp.reason})
+
+        # Phase 3a-4: compliance check.
+        try:
+            stats = session_capture_stats(engine, session_id=int(sid))
+            if is_under_captured(stats):
+                record_event(
+                    engine, session_id=int(sid), event_kind="under_captured",
+                    payload={
+                        "turn_count": stats.turn_count,
+                        "capture_count": stats.capture_count,
+                        "decision_count": stats.decision_count,
+                        "gotcha_count": stats.gotcha_count,
+                        "subtask_summary_count": stats.subtask_summary_count,
+                    },
+                )
+                if is_strict_mode(engine):
+                    _emit_noop()
+                    ctx.exit(2)
+        except (SystemExit, click.exceptions.Exit):
+            raise  # ctx.exit raises click.exceptions.Exit; do NOT swallow via bare Exception
+        except Exception as exc:  # noqa: BLE001 — hook must be non-fatal
+            record_event(
+                engine, session_id=int(sid), event_kind="hook_error",
+                payload={"hook": "session_end", "error": str(exc)[:500]},
+            )
+
     _emit_noop()
 
 
@@ -186,6 +213,19 @@ def pre_compact_cmd(ctx: click.Context) -> None:
     )
 
     sel = gather_bundle_selection(engine, session_id=sid, cwd=inp.cwd, limit_per_kind=10)
+    # Phase 3a-4: thin-session flag is non-fatal — must not prevent bundle persistence
+    # if record_event fails (e.g. unmigrated DB without 'thin_session' in event_kind allowlist).
+    try:
+        if is_thin_bundle(sel):
+            record_event(
+                engine, session_id=sid, event_kind="thin_session",
+                payload={"cwd": inp.cwd, "trigger": "pre_compact"},
+            )
+    except Exception as exc:  # noqa: BLE001 — hook must be non-fatal
+        record_event(
+            engine, session_id=sid, event_kind="hook_error",
+            payload={"hook": "pre_compact", "error": str(exc)[:500]},
+        )
     rendered = render_bundle(
         sel,
         cc_session_id=inp.session_id,

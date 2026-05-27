@@ -59,3 +59,41 @@ brain failure invalidate <id> --reason "fixed in commit abc123 / not actually a 
 ```
 
 Re-occurrences (same `target_problem` + `attempted_approach`) bump `retry_count` and clear any prior invalidation — the lesson didn't stick. Auto-flagged rows have `root_cause` and `lesson` NULL; refine manually with a fresh `brain failure record` if you have insight to add (the dedup will update the same row).
+
+## Compliance triage (Phase 3a-4)
+
+The SessionEnd hook now flags under-captured sessions (≥5 user prompts + <3 substantive captures). The PreCompact hook flags thin bundles (no decisions/gotchas/failures/open subtasks). Both signals live in `session_events`.
+
+```bash
+# Audit recent under-captured sessions.
+brain compliance list --limit 20
+
+# Inspect one session's stats by id.
+brain compliance check --session-id <N>
+
+# Sessions that produced thin resume bundles.
+brain compliance list-thin --limit 20
+```
+
+`brain status` shows a one-line summary of both counts (last 30 days).
+
+### Strict mode (opt-in)
+
+```sql
+-- Enable: SessionEnd hook exits 2 on under-captured sessions.
+INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW())
+ON CONFLICT (key) DO UPDATE SET value = 'true';
+
+-- Disable.
+UPDATE brain_config SET value = 'false', updated_at = NOW() WHERE key = 'strict_mode';
+```
+
+Off by default because exploratory sessions (no captures expected) would otherwise be punished.
+
+### Capture thresholds
+
+Hardcoded constants in `src/brain/compliance.py`:
+- `turn_threshold = 5` — below this, no audit (exploratory work).
+- `capture_threshold = 3` — strictly less than this counts as under-captured.
+
+To change for one CLI invocation: `brain health --threshold 5` overrides the capture threshold. The turn threshold is not yet CLI-tunable.

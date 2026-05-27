@@ -72,6 +72,9 @@ def write(
 @click.option("--project-id", type=int)
 @click.option("--bucket", multiple=True)
 @click.option("--kind-filter", multiple=True)
+@click.option("--fts-only", is_flag=True, help="Skip the dense leg; FTS-only retrieval (fast, no semantic recall)")
+@click.option("--no-rerank", is_flag=True, help="Skip the cross-encoder reranker (faster, but tau abstains on raw RRF scores)")
+@click.option("--no-tau", is_flag=True, help="Skip the abstain threshold; always return top-k")
 @click.pass_context
 def recall(
     ctx: click.Context,
@@ -80,8 +83,29 @@ def recall(
     project_id: int | None,
     bucket: tuple[str, ...],
     kind_filter: tuple[str, ...],
+    fts_only: bool,
+    no_rerank: bool,
+    no_tau: bool,
 ) -> None:
-    """Retrieve top-k sources matching a query (FTS in Phase 1)."""
+    """Retrieve top-k sources matching a query.
+
+    Default: full hybrid pipeline (FTS + BGE-M3 + RRF + mxbai cross-encoder
+    rerank + tau abstain). Flags trim the stack for speed at quality cost.
+
+    First invocation loads the embedder + reranker (~1GB of model weights).
+    """
+    embedder = None
+    reranker = None
+    if not fts_only:
+        from brain.embed.bge_m3 import BgeM3Embedder
+        embedder = BgeM3Embedder()
+        if not no_rerank:
+            from brain.retrieval.rerank import default_reranker
+            # Auto-pick mxbai-rerank-large-v2 on ≥6GB GPU, bge-reranker-v2-m3 on
+            # smaller GPUs / CPU. See decision: v0.8.3-option-g-retrieval-stack.
+            reranker = default_reranker()
+    # --no-tau sets tau to 0 so should_abstain only triggers on None scores
+    tau = 0.0 if no_tau else None
     hits = _recall(
         ctx.obj["engine"],
         query,
@@ -89,6 +113,9 @@ def recall(
         project_id=project_id,
         buckets=list(bucket) or None,  # type: ignore[arg-type]
         kinds=list(kind_filter) or None,
+        embedder=embedder,
+        reranker=reranker,
+        tau=tau,
     )
     table = Table("id", "kind", "score", "content (head)")
     for h in hits:
@@ -281,6 +308,79 @@ def ingest_source_cmd(
             indent=2,
         )
     )
+
+
+@ingest.command("backfill")
+@click.option("--kinds", default="decision,gotcha,pattern,note,subtask_summary,session_summary",
+              help="Comma-separated kinds to backfill (default: substantive capture kinds)")
+@click.option("--child-max-tokens", default=256, type=int)
+@click.option("--parent-max-tokens", default=1024, type=int)
+@click.option("--limit", type=int, default=None, help="Cap how many sources to ingest")
+@click.pass_context
+def ingest_backfill_cmd(
+    ctx: click.Context,
+    kinds: str,
+    child_max_tokens: int,
+    parent_max_tokens: int,
+    limit: int | None,
+) -> None:
+    """Ingest all sources of the given kinds that don't yet have embeddings.
+
+    Use at the end of a substantive session to make captured decisions/gotchas/etc.
+    retrievable via the hybrid stack. Equivalent to looping `brain ingest source` over
+    every uncovered source, but loads the embedder model once.
+    """
+    from sqlalchemy import text as _text
+
+    from brain.db import session_scope as _scope
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.ingest import ingest_source as _ingest
+
+    kind_list = [k.strip() for k in kinds.split(",") if k.strip()]
+    # Children created by ingest_source live as child rows in `sources` with
+    # parent_id = the parent source. The dense leg embeds the children, so a
+    # parent has coverage iff at least one of its child rows (or itself for the
+    # single-chunk case) is in embeddings_1024.
+    sql = (
+        "SELECT s.id FROM sources s "
+        "WHERE s.kind = ANY(:kinds) "
+        "  AND s.t_valid_to IS NULL "
+        "  AND s.parent_id IS NULL "
+        "  AND NOT EXISTS ("
+        "    SELECT 1 FROM embeddings_1024 e "
+        "    JOIN sources child ON child.id = e.source_id "
+        "    WHERE child.parent_id = s.id OR child.id = s.id"
+        "  ) "
+        "ORDER BY s.id ASC"
+    )
+    if limit is not None:
+        sql += f" LIMIT {int(limit)}"
+
+    with _scope(ctx.obj["engine"]) as s:
+        rows = s.execute(_text(sql), {"kinds": kind_list}).all()
+
+    if not rows:
+        click.echo("(nothing to backfill — all matching sources already have embeddings)")
+        return
+
+    click.echo(f"backfilling {len(rows)} sources...")
+    embedder = BgeM3Embedder()
+    ok = 0
+    for r in rows:
+        summary = _ingest(
+            ctx.obj["engine"],
+            source_id=int(r.id),
+            embedder=embedder,
+            child_max_tokens=child_max_tokens,
+            parent_max_tokens=parent_max_tokens,
+        )
+        ok += 1
+        click.echo(
+            f"  source_id={summary.parent_source_id} "
+            f"chunks={summary.chunks_created} "
+            f"embeddings={summary.embeddings_inserted}"
+        )
+    click.echo(f"done: {ok}/{len(rows)} backfilled")
 
 
 @ingest.command("prepare-contexts")

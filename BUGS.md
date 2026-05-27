@@ -22,6 +22,74 @@ Format per entry:
 
 ---
 
+## 2026-05-27 — [fixed-in-v0.8.3] `brain recall` CLI defaulted to FTS-only — full hybrid stack (BGE-M3 + RRF + rerank) was built but unwired
+
+**Where:** `src/brain/cli.py` `recall` command + `src/brain/read.py` `recall()` signature defaults
+**Severity:** **critical** — the brain's headline retrieval feature was effectively absent from the default user path
+**Found via:** Path D "use the brain" evaluation — captured 3 things via `brain write`, then ran `brain recall` on rephrased questions. 3/4 queries returned empty despite the captures being clearly relevant. Investigation showed `recall(embedder=None)` skips the dense leg entirely (intentional FTS-only fallback for Phase 1), but the CLI never passed an embedder.
+
+**Symptom:** Without embeddings, retrieval was exact-token FTS only. Queries phrased with different vocabulary than the stored content (synonyms, paraphrases) returned 0 results even when the topic was clearly captured.
+
+**Root cause (three-layer):**
+1. `brain.write()` does not auto-trigger `brain ingest source` to populate `embeddings_1024`. Captures land in `sources` + `sources_fts`; the dense index stays empty unless `brain ingest source <id>` is run manually.
+2. `brain.read.recall()` defaults `embedder=None` (Phase 1 behavior), making the dense leg opt-in.
+3. The CLI `recall` command never constructed an embedder or reranker, so the default user path was always FTS-only despite the spec advertising hybrid as the headline feature.
+
+**Fix (this session, partial):** `src/brain/cli.py` `recall` command now defaults to full hybrid pipeline — loads `BgeM3Embedder` + `MxbaiReranker`, passes both into `_recall`. Flags `--fts-only` / `--no-rerank` / `--no-tau` trim the stack for speed. First invocation pays the ~3s embedder load + ~2s reranker load.
+
+**Still open:**
+- (a) Backfill embeddings for prior captures (this session: backfilled 8 sources via loop, but no general CLI for "ingest all sources missing embeddings").
+- (b) Make `brain write` auto-trigger `ingest source` on success so new captures are immediately retrievable. This is the right architectural fix; today's session only fixed the read path.
+- (c) Test that hybrid recall returns expected results from a populated brain (smoke test, not unit test — should sit in `tests/test_recall_hybrid_smoke.py`).
+
+**Status:** read-path fixed in v0.8.3; write-path auto-embedding still deferred (new `brain ingest backfill` is the explicit close — agent runs it after substantive captures). A/B eval confirms the impact: hit@5 = 25% (FTS-only) vs 100% (hybrid) on 16 hand-curated questions. **Block Phase 3b on this being fixed → unblocked as of v0.8.3.**
+
+---
+
+## 2026-05-27 — [fixed-in-v0.8.3] Reranker MIN_FREE_GB heuristic + per-reranker tau calibration
+
+**Where:** `src/brain/retrieval/rerank.py` + `src/brain/read.py`
+**Severity:** medium — defaulted to mxbai-rerank-large-v2 on 4GB GPUs, which OOMs immediately
+**Found via:** Path-D A/B eval, killed first run at 41 min wall (CPU reranker too slow); second run with bge-reranker-v2-m3 showed tau abstain killing 8/16 hits because the default tau (0.65) was calibrated for mxbai's score distribution, not bge-v2-m3's sigmoid output (confident ~0.95, weak ~0.001, noise ~0.0003).
+
+**Symptom:** On a 4GB GPU, the only available reranker (mxbai-large) doesn't fit alongside the embedder — falls back to CPU, ~30s/query. Switching to bge-reranker-v2-m3 (canonical pair for BGE-M3, fits 4GB) fired tau abstain on every weak-but-correct match because default tau=0.65 vs actual top-score ~0.003.
+
+**Fix:** 
+1. `_CrossEncoderReranker` base class with per-model `DEFAULT_TAU` + `MIN_FREE_GB` class attrs.
+2. `default_reranker()` factory picks mxbai on ≥6GB GPU, bge-reranker-v2-m3 otherwise.
+3. `recall()` falls back to `reranker.DEFAULT_TAU` when `tau` is None and a reranker is in play; bucket-based tau only when no reranker.
+4. `brain recall` CLI uses `default_reranker()` — no more hardcoded mxbai default.
+
+**Eval results post-calibration (16 real Qs + 4 controls, 4GB GPU):**
+- FTS only: hit@5=25%, FP=0/4, 4ms/q
+- Hybrid (no rerank): hit@5=100%, FP=4/4, 50ms/q
+- Hybrid + bge-rerank + tau=0.01: hit@5=75%, FP=**0/4**, 1170ms/q
+- Hybrid + bge-rerank + no-tau: hit@5=100%, FP=4/4, 1170ms/q
+
+**Known limit:** bge-v2-m3 doesn't strongly separate weak-match from noise. 4/16 paraphrased queries get abstained even though correct source is in candidates. Mitigation: agent-driven retrieval uses no-tau and reads top-5; "is this in the brain?" automated queries use tau. Documented operating modes in the captured decision (`brain recall "v0.8.3 retrieval decision option G"`).
+
+**Status:** fixed-in-v0.8.3.
+
+---
+
+## 2026-05-27 — [open, deferred] Multi-chunk sources skip contextual retrieval — BUGS.md saturates top-5 results
+
+**Where:** `brain ingest source` + `brain ingest backfill` (both pass `contexts=None`)
+**Severity:** medium — degrades retrieval precision for any multi-chunk capture
+**Found via:** A/B eval showing source 18 (BUGS.md, 19 chunks) appearing in top-5 on nearly every query, including controls (nginx, kubernetes).
+
+**Symptom:** Each chunk of a multi-chunk document is embedded without surrounding context. A chunk about "Click ctx.exit Phase 3a-4" loses its "this is a BUGS.md entry" framing, so it pattern-matches against queries on unrelated topics. Anthropic's Contextual Retrieval paper documents 49% retrieval-failure reduction with contextual prepend on multi-chunk docs.
+
+**Root cause:** `_insert_chunks_and_embeddings(contexts=None)` is the default path. The contextual flow (`prepare-contexts` + `finalize-contexts`) is built but requires an agent inline to generate per-chunk summaries.
+
+**Fix path:** Extend `brain ingest backfill` to detect multi-chunk sources (chunk count > 1) and route them through the contextual flow. Single-chunk sources (decisions, gotchas, patterns) skip — no value when chunk == whole doc.
+
+**Status:** open — deferred to Phase 3b retrieval hardening. Current workaround: agent reads top-5 and discards the BUGS.md-chunk false positives.
+
+---
+
+---
+
 ## 2026-05-27 — [fixed-in-v0.8.2] Test suite wipes the dev `brain` database — TRUNCATE + alembic-downgrade-base ran against production data
 
 **Where:** `tests/conftest.py` `pg_url` default + `_apply_migrations` autouse fixture + `_truncate_tables`

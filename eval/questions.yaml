@@ -1,0 +1,125 @@
+# Hand-curated Q/A eval set for retrieval A/B testing (2026-05-27, v0.8.2-snapshot).
+#
+# Each question carries `expected_source_ids` — parent source IDs that contain
+# the answer. A retrieval hit counts if any of the expected IDs OR any of their
+# children appear in the top-k results.
+#
+# `control: true` marks questions that SHOULD return empty (or low-score).
+# Used to measure false-positive rate.
+#
+# Tags:
+#   - vocab_match: query uses same words as the capture (FTS should succeed)
+#   - paraphrase: query uses different words for the same concept (FTS will struggle)
+#   - synonym: heavier reword
+#   - control: no relevant content in brain
+
+questions:
+  # === decision 6: isolated test DB ===
+  - id: q01
+    query: "pytest wipes my dev brain captures"
+    expected_source_ids: [6]
+    tags: [paraphrase]
+
+  - id: q02
+    query: "isolated test database brain_test conftest"
+    expected_source_ids: [6]
+    tags: [vocab_match]
+
+  - id: q03
+    query: "why does running tests delete my saved sources"
+    expected_source_ids: [6]
+    tags: [synonym]
+
+  # === decision 12: wire hybrid recall default ===
+  - id: q04
+    query: "brain recall only uses FTS not embeddings"
+    expected_source_ids: [12]
+    tags: [vocab_match]
+
+  - id: q05
+    query: "default retrieval missing semantic search"
+    expected_source_ids: [12]
+    tags: [paraphrase]
+
+  - id: q06
+    query: "BGE-M3 not being used by the recall command"
+    expected_source_ids: [12]
+    tags: [vocab_match]
+
+  # === pattern 7: relax CHECK constraint ===
+  - id: q07
+    query: "when to drop a CHECK constraint that limits enum values"
+    expected_source_ids: [7]
+    tags: [vocab_match]
+
+  - id: q08
+    query: "every new event kind needs its own migration"
+    expected_source_ids: [7]
+    tags: [paraphrase]
+
+  - id: q09
+    query: "trade-off of removing column-level allowlist constraints"
+    expected_source_ids: [7]
+    tags: [synonym]
+
+  # === gotcha 8: TRUNCATE deadlock retry ===
+  - id: q10
+    query: "pytest TRUNCATE deadlock with subprocess tests"
+    expected_source_ids: [8]
+    tags: [vocab_match]
+
+  - id: q11
+    query: "test cleanup blocks because of held locks"
+    expected_source_ids: [8]
+    tags: [synonym]
+
+  - id: q12
+    query: "OperationalError on truncate during conftest teardown"
+    expected_source_ids: [8]
+    tags: [vocab_match]
+
+  # === BUGS.md (source 18) — entries inside it ===
+  - id: q13
+    query: "psql connect to brain fails with no such socket"
+    expected_source_ids: [18]
+    tags: [vocab_match]
+
+  - id: q14
+    query: "Click ctx.exit doesn't actually exit non-zero"
+    expected_source_ids: [18]
+    tags: [vocab_match]
+
+  - id: q15
+    query: "slash command and skill have the same name and conflict"
+    expected_source_ids: [18]
+    tags: [vocab_match]
+
+  - id: q16
+    query: "Stop hook captures false positives"
+    expected_source_ids: [18]
+    tags: [paraphrase]
+
+  # === Controls (should return empty or low-score) ===
+  - id: c01
+    query: "configure nginx as a reverse proxy for fastapi"
+    expected_source_ids: []
+    tags: [control]
+    control: true
+
+  - id: c02
+    query: "kubernetes ingress with TLS cert manager"
+    expected_source_ids: []
+    tags: [control]
+    control: true
+
+  - id: c03
+    query: "react useReducer state management patterns"
+    expected_source_ids: []
+    tags: [control]
+    control: true
+
+  - id: c04
+    query: "rust async fn lifetime annotation"
+    expected_source_ids: []
+    tags: [control]
+    control: true

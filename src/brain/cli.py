@@ -706,6 +706,20 @@ def status(ctx: click.Context) -> None:
                 "SELECT target_problem, attempted_approach, retry_count, last_attempted_at FROM failure_memories WHERE t_valid_to IS NULL ORDER BY last_attempted_at DESC LIMIT 5"
             )
         ).fetchall()
+        uc_count = s.execute(
+            text(
+                "SELECT COUNT(DISTINCT session_id) FROM session_events "
+                "WHERE event_kind = 'under_captured' "
+                "  AND occurred_at > NOW() - INTERVAL '30 days'"
+            )
+        ).scalar()
+        thin_count = s.execute(
+            text(
+                "SELECT COUNT(DISTINCT session_id) FROM session_events "
+                "WHERE event_kind = 'thin_session' "
+                "  AND occurred_at > NOW() - INTERVAL '30 days'"
+            )
+        ).scalar()
 
     t1 = Table("project slug", "status", "updated_at", title="Active projects")
     for r in active_projects:
@@ -724,7 +738,10 @@ def status(ctx: click.Context) -> None:
         t3.add_row(str(r[0])[:50], str(r[1])[:50], str(r[2]), str(r[3]))
     console.print(t3)
 
-    click.echo("tasks tracking lands Phase 3a")
+    console.print(
+        f"[yellow]Compliance (last 30d): under-captured sessions = {uc_count or 0}, "
+        f"thin sessions = {thin_count or 0}[/]"
+    )
 
 
 @main.command(name="promote-answer")

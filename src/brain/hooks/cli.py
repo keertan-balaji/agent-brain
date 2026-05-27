@@ -11,7 +11,7 @@ import click
 from sqlalchemy import text
 
 from brain import failures
-from brain.compliance import is_strict_mode, is_under_captured, session_capture_stats
+from brain.compliance import is_strict_mode, is_thin_bundle, is_under_captured, session_capture_stats
 from brain.db import session_scope
 from brain.hooks.bundle import gather_bundle_selection
 from brain.hooks.transcript_scan import scan_for_failures
@@ -213,6 +213,11 @@ def pre_compact_cmd(ctx: click.Context) -> None:
     )
 
     sel = gather_bundle_selection(engine, session_id=sid, cwd=inp.cwd, limit_per_kind=10)
+    if is_thin_bundle(sel):
+        record_event(
+            engine, session_id=sid, event_kind="thin_session",
+            payload={"cwd": inp.cwd, "trigger": "pre_compact"},
+        )
     rendered = render_bundle(
         sel,
         cc_session_id=inp.session_id,

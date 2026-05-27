@@ -12,8 +12,14 @@ The markdown view under `<vault>/Agent-Brain/` is a **partial fallback only** �
 
 ## Restore
 
+Brain runs in Docker on `127.0.0.1:5433` — bare `psql -U brain brain` fails (no host socket). Use TCP or `docker exec`:
+
 ```bash
-gunzip -c brain-2026-05-24.sql.gz | psql -U brain brain
+# Via TCP
+gunzip -c brain-2026-05-24.sql.gz | PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain
+
+# Or via the container
+gunzip -c brain-2026-05-24.sql.gz | docker exec -i brain-postgres psql -U brain -d brain
 ```
 
 ## Conflict resolution (markdown ↔ DB)
@@ -79,13 +85,22 @@ brain compliance list-thin --limit 20
 
 ### Strict mode (opt-in)
 
-```sql
--- Enable: SessionEnd hook exits 2 on under-captured sessions.
-INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW())
-ON CONFLICT (key) DO UPDATE SET value = 'true';
+Brain runs in Docker, exposed on `127.0.0.1:5433`. There is no host Unix socket, so bare `psql -d brain` fails. Use TCP or `docker exec`:
 
--- Disable.
-UPDATE brain_config SET value = 'false', updated_at = NOW() WHERE key = 'strict_mode';
+```bash
+# Enable: SessionEnd hook exits 2 on under-captured sessions.
+PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c \
+  "INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW()) \
+   ON CONFLICT (key) DO UPDATE SET value = 'true';"
+
+# Or via the container directly.
+docker exec -i brain-postgres psql -U brain -d brain -c \
+  "INSERT INTO brain_config(key, value, updated_at) VALUES ('strict_mode', 'true', NOW()) \
+   ON CONFLICT (key) DO UPDATE SET value = 'true';"
+
+# Disable.
+PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c \
+  "UPDATE brain_config SET value = 'false', updated_at = NOW() WHERE key = 'strict_mode';"
 ```
 
 Off by default because exploratory sessions (no captures expected) would otherwise be punished.

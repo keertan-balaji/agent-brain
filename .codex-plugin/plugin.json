@@ -1,6 +1,6 @@
 {
   "name": "agent-brain",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Persistent cognition store for AI coding agents (Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers). 18 brain-* skills cover capture, recall, structured reasoning, contextual ingest, failure-memory, session lifecycle, compliance, usage discipline. 5 obsidian-* skills retained for vault interop.",
   "author": {
     "name": "Keertan Balaji",

@@ -22,6 +22,22 @@ Format per entry:
 
 ---
 
+## 2026-05-27 — [fixed-in-440a10a] Skill/command name collision = bare slash command unresolvable
+
+**Where:** Claude Code plugin resolver — `skills/<name>/SKILL.md` and `commands/<name>.md` with the same name
+**Severity:** medium (user-visible — slash command appears in autocomplete but errors on invocation)
+**Found via:** `/using-agent-brain` returned "Unknown command" while `/agent-brain:using-agent-brain` worked.
+
+**Symptom:** When a plugin ships both `skills/<NAME>` (auto-aliased to `/<plugin>:<NAME>` AND optionally `/<NAME>` bare) AND `commands/<NAME>.md` (registers `/<NAME>` bare), Claude Code's autocomplete shows BOTH entries but the bare-form resolver fails with "Unknown command".
+
+**Root cause:** Bare slash-command namespace collision between a skill alias and an explicit command file. Resolver can't disambiguate.
+
+**Fix:** Rename the command file (or the skill) so the bare paths don't collide. v0.8.1 renames `commands/using-agent-brain.md` → `commands/brain.md`; skill keeps the longer name.
+
+**Status:** fixed in 440a10a (v0.8.1). When designing future slash commands, never reuse a skill's bare name.
+
+---
+
 ## 2026-05-27 — [open] Test deadlock race: `_truncate_tables` fixture vs subprocess hook tests
 
 **Where:** `tests/conftest.py` `_truncate_tables` fixture interacting with subprocess-based hook e2e tests

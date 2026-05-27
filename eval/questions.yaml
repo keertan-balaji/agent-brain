@@ -81,22 +81,22 @@ questions:
   # === BUGS.md (source 18) — entries inside it ===
   - id: q13
     query: "psql connect to brain fails with no such socket"
-    expected_source_ids: [18]
+    expected_source_ids: [47]
     tags: [vocab_match]
 
   - id: q14
     query: "Click ctx.exit doesn't actually exit non-zero"
-    expected_source_ids: [18]
+    expected_source_ids: [47]
     tags: [vocab_match]
 
   - id: q15
     query: "slash command and skill have the same name and conflict"
-    expected_source_ids: [18]
+    expected_source_ids: [47]
     tags: [vocab_match]
 
   - id: q16
     query: "Stop hook captures false positives"
-    expected_source_ids: [18]
+    expected_source_ids: [47]
     tags: [paraphrase]
 
   # === Controls (should return empty or low-score) ===

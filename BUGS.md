@@ -72,7 +72,7 @@ Format per entry:
 
 ---
 
-## 2026-05-27 — [open, deferred] Multi-chunk sources skip contextual retrieval — BUGS.md saturates top-5 results
+## 2026-05-27 — [partial-fix-in-v0.8.4, deferred-full] Multi-chunk sources skip contextual retrieval — BUGS.md saturates top-5 results
 
 **Where:** `brain ingest source` + `brain ingest backfill` (both pass `contexts=None`)
 **Severity:** medium — degrades retrieval precision for any multi-chunk capture
@@ -82,9 +82,37 @@ Format per entry:
 
 **Root cause:** `_insert_chunks_and_embeddings(contexts=None)` is the default path. The contextual flow (`prepare-contexts` + `finalize-contexts`) is built but requires an agent inline to generate per-chunk summaries.
 
-**Fix path:** Extend `brain ingest backfill` to detect multi-chunk sources (chunk count > 1) and route them through the contextual flow. Single-chunk sources (decisions, gotchas, patterns) skip — no value when chunk == whole doc.
+**Partial fix v0.8.4:** `ingest_source` now defaults to `contextual=True`. For multi-chunk sources, generates a deterministic heuristic context per chunk: `"[From <kind>[ at <uri>]] [Section: <nearest preceding markdown header>]"`. Cheap, no LLM, deterministic.
 
-**Status:** open — deferred to Phase 3b retrieval hardening. Current workaround: agent reads top-5 and discards the BUGS.md-chunk false positives.
+**Measured impact (16-question A/B eval, re-ingested BUGS.md):**
+- FTS hit@5: 25% → 31% (+24% relative — section headers add searchable tokens)
+- Hybrid hit@5: 100% → 100% (already saturated; no measurable change)
+- Hybrid+rerank+tau hit@5: 75% → 75% (unchanged)
+- FP rate unchanged
+
+**Honest read:** heuristic context helps FTS modestly by surfacing section headers, but does NOT close the BUGS.md-saturation issue on the hybrid+rerank path. The full retrieval pipeline already extracts the signal; the heuristic gives FTS a small boost.
+
+**Anthropic's promised 49% retrieval-failure reduction requires LLM-generated per-chunk context** (specifically "what this chunk is about" sentences), not deterministic heuristic. That needs the agent-driven prepare-contexts / finalize-contexts flow with an agent in the loop — out of scope for an automated backfill.
+
+**Status:** partial-fix-in-v0.8.4 (heuristic). Full LLM-driven contextual ingest deferred to a Phase 3b task that wires the agent-driven flow into a single-command CLI wrapper.
+
+---
+
+## 2026-05-27 — [fixed-in-v0.8.4] Captures sat unembedded until manual `brain ingest backfill` — easy to forget
+
+**Where:** `brain.write` (and callers: `brain write` / `brain decide` / `brain failure record` CLI commands)
+**Severity:** medium — defeated the capture discipline; agent might capture-then-forget-to-embed, leaving the source unretrievable
+**Found via:** v0.8.3 introduced the hybrid recall default, but `brain write` and friends did not auto-trigger `ingest_source`. The fix in v0.8.3 added `brain ingest backfill` as an explicit catch-up command — but relying on the agent to remember to run it is exactly the discipline failure mode the using-agent-brain skill warns about.
+
+**Symptom:** Capture via `brain write` / `brain decide` / `brain failure record` (CLI) succeeds, but the source isn't retrievable via hybrid recall until `brain ingest backfill` runs.
+
+**Fix v0.8.4:** `brain.write()` gains an `auto_embed: bool` parameter (default False to preserve Stop-hook performance). CLI commands that emit substantive captures (`brain write`, `brain decide`, `brain failure record`, `brain promote-answer`) pass `auto_embed=True`. Inside `write()`, when `auto_embed=True` AND `kind` is substantive (decision/gotcha/pattern/note/subtask_summary/session_summary/faq), it triggers `ingest_source` after INSERT. Module-level lazy embedder cache means first auto-embed in a process pays ~3s; subsequent calls reuse.
+
+Hook-driven `failures.record()` (called from Stop hook on auto-flagged failures) keeps `auto_embed=False` so high-volume noise captures don't pay the embedder load tax on every Bash exit. Backfill remains for catching those up if needed.
+
+Env override: `BRAIN_AUTO_EMBED=false` disables globally even when caller passes True.
+
+**Status:** fixed-in-v0.8.4.
 
 ---
 

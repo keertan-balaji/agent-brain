@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers.",
-    "version": "0.8.0"
+    "version": "0.8.1"
   },
   "plugins": [
     {
@@ -15,8 +15,8 @@
         "source": "url",
         "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "v0.8.0: using-agent-brain skill + /using-agent-brain slash command — enforces brain-usage discipline at session start. 18 brain-* skills + 5 obsidian-* skills (23 total). No Anthropic API key required.",
-      "version": "0.8.0",
+      "description": "v0.8.1: using-agent-brain skill + /brain slash command — enforces brain-usage discipline at session start. 18 brain-* skills + 5 obsidian-* skills (23 total). No Anthropic API key required.",
+      "version": "0.8.1",
       "strict": true
     }
   ]

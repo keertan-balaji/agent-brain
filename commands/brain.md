@@ -2,7 +2,7 @@
 description: "Load the agent-brain usage discipline (recall before work, capture at breakpoints, pre-exit checklist)"
 ---
 
-# /using-agent-brain
+# /brain
 
 Invoke the `agent-brain:using-agent-brain` skill via the Skill tool. Read it end-to-end. Then:
 

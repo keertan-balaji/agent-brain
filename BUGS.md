@@ -22,6 +22,54 @@ Format per entry:
 
 ---
 
+## 2026-05-27 — [fixed-in-e49f704] `ctx.exit()` raises `click.exceptions.Exit`, not `SystemExit`
+
+**Where:** Click 8.x context exit semantics; affects any hook handler using `ctx.exit(n)` for non-zero exits
+**Severity:** medium
+**Found via:** Phase 3a-4 Task 3 — strict-mode SessionEnd was supposed to exit non-zero, but `except SystemExit: raise` was the wrong guard.
+
+**Symptom:** A `try/except Exception` block around `ctx.exit(2)` swallows the intended exit (because `click.exceptions.Exit` inherits from `RuntimeError → Exception`), then logs the swallowed exit as a `hook_error` and exits 0 instead of 2.
+
+**Root cause:** Click 8.x changed `ctx.exit()` to raise `click.exceptions.Exit`, not stdlib `SystemExit`. The two are unrelated in the exception hierarchy — `SystemExit` inherits from `BaseException` (and was never caught by `Exception`); `click.exceptions.Exit` inherits from `RuntimeError` (so a bare `Exception` clause DOES catch it).
+
+**Fix:** Catch `(SystemExit, click.exceptions.Exit)` explicitly BEFORE the bare-Exception non-fatal guard, and re-raise.
+
+**Status:** fixed in e49f704 (Phase 3a-4 SessionEnd). Apply same pattern to any future hook that uses `ctx.exit()`.
+
+---
+
+## 2026-05-27 — [fixed-in-e49f704] `session_events.event_kind` CHECK constraint blocks new kinds
+
+**Where:** `session_events_kind_check` constraint from migration 010
+**Severity:** high — silent insert failure if not migrated
+**Found via:** Phase 3a-4 Task 3 — attempting to write `event_kind='under_captured'` failed with `CheckViolation`.
+
+**Symptom:** Any new `event_kind` value not in the original 6-item allowlist (`session_start`, `session_end`, `user_prompt_submit`, `stop`, `pre_compact`, `hook_error`) raises a CheckViolation at INSERT time. The Stop hook's existing `event_kind='hook_error'` wrap swallows the error and logs it as ANOTHER hook_error event — infinite reentrancy risk.
+
+**Root cause:** Migration 010 hard-coded the kind allowlist as a CHECK constraint. Future phases adding new kinds must migrate.
+
+**Fix:** Migration 011 drops + recreates the constraint with `under_captured` added. Task 4 needs another migration (012) to add `thin_session`.
+
+**Status:** partial — `under_captured` added in 011. `thin_session` lands in Task 4 / migration 012. Any future event kind requires a migration; consider relaxing the CHECK or moving the allowlist into a lookup table in Phase 4.
+
+---
+
+## 2026-05-27 — [fixed-via-cleanup] `brain_config` not in conftest TRUNCATE list — strict_mode leaks across tests
+
+**Where:** `tests/conftest.py` `_truncate_tables` fixture
+**Severity:** low — only affects tests that mutate brain_config; deliberately preserved so seeded config rows survive
+**Found via:** Phase 3a-4 Task 3 — strict_mode set to 'true' in one test leaked into a later test that expected `is_strict_mode() == False`.
+
+**Symptom:** Test order-dependent failures when one test sets `brain_config('strict_mode', 'true')` and the next reads `is_strict_mode()`.
+
+**Root cause:** `brain_config` is intentionally excluded from `_truncate_tables` to preserve seeded constants. Tests that mutate it must self-clean.
+
+**Fix:** Tests that toggle `strict_mode` explicitly reset to 'false' at the end, OR use a per-test fixture that records and restores prior state.
+
+**Status:** worked around in `test_hook_session_end_compliance.py`. Phase 3a-4 Task 9 docs note this as a testing convention.
+
+---
+
 ## 2026-05-27 — [open] Stop-hook false-positive rate ~66% on smoke-test session
 
 **Where:** Stop hook → `transcript_scan.py` → `failures.record`

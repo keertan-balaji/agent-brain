@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — Phase 3a-2 adds failure-memory capture (auto-flagged by Stop hook), sanitization at ingest, and origin-aware quoting at recall.",
-  "version": "0.6.0",
+  "description": "Persistent cognition store for AI coding agents — Phase 3a-4 adds the compliance subsystem (under-captured session detection, thin-session flagging, opt-in strict_mode).",
+  "version": "0.7.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

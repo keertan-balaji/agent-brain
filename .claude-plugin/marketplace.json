@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers.",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "plugins": [
     {
@@ -15,8 +15,8 @@
         "source": "url",
         "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "Phase 3a-2: failure-memory auto-capture from Stop hook + brain-failure skill + Phase-2 sanitization minimum (ANSI strip + suspicious-flag at ingest, origin-aware quoting at recall). 16 brain-* skills + 5 obsidian-* skills (21 total). No Anthropic API key required.",
-      "version": "0.6.0",
+      "description": "Phase 3a-4: compliance subsystem — under-captured + thin-session detection, opt-in strict_mode. 17 brain-* skills + 5 obsidian-* skills (22 total). No Anthropic API key required.",
+      "version": "0.7.0",
       "strict": true
     }
   ]

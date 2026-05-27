@@ -22,6 +22,25 @@ Format per entry:
 
 ---
 
+## 2026-05-27 — [open] `psql -d brain` fails — DB runs in Docker on TCP-only, no local Unix socket
+
+**Where:** any documentation or skill body that suggests `psql -d brain ...` for direct DB access
+**Severity:** low (user-visible friction; brain CLI works fine)
+**Found via:** the brain-compliance skill's strict_mode example: `psql -d brain -c "INSERT INTO brain_config..."` — failed with "connection to socket /run/postgresql/.s.PGSQL.5432 failed: No such file or directory".
+
+**Symptom:** Bare `psql -d brain` tries the default Unix socket, which doesn't exist because `docker-compose.yml` exposes Postgres only on `127.0.0.1:5433` via TCP. No local Postgres install means no socket.
+
+**Root cause:** Brain runs in a container, port-mapped to `127.0.0.1:5433` (not the default 5432). The host has no local postgres install, so the Unix socket at `/run/postgresql/.s.PGSQL.5432` doesn't exist.
+
+**Fix / workaround:** Use one of:
+- `PGPASSWORD=brain_dev_password psql -h 127.0.0.1 -p 5433 -U brain -d brain -c "..."`
+- `docker exec -it brain-postgres psql -U brain -d brain -c "..."`
+- `brain` CLI subcommands (already configured via `BRAIN_DB_URL` env or default)
+
+**Status:** open — fix docs in `skills/brain-compliance/SKILL.md`, `docs/operations.md`, and any other place suggesting bare `psql -d brain`.
+
+---
+
 ## 2026-05-27 — [fixed-in-440a10a] Skill/command name collision = bare slash command unresolvable
 
 **Where:** Claude Code plugin resolver — `skills/<name>/SKILL.md` and `commands/<name>.md` with the same name

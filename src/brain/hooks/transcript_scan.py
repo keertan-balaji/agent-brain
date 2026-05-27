@@ -21,6 +21,70 @@ _FAILURE_PATTERNS = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# Noise filters (v0.8.5) — Stop hook false positives observed in real sessions.
+# Each filter trims captures that look like failures but aren't worth recording.
+
+# 1. System-injected metadata that ends up in user content (IDE markers, harness
+#    reminders, system reminders). These are never real failures; treating them
+#    as target_problem creates rows that are pure noise.
+_SYSTEM_MARKER_RE = re.compile(
+    r"^\s*<(ide_opened_file|system-reminder|task-notification|command-message|command-name)\b",
+    re.IGNORECASE,
+)
+
+# 2. CLI-usage errors — "Try 'brain --help'", "Usage: brain decide [OPTIONS] TITLE",
+#    "Error: Missing argument 'TITLE'". These are legitimate flag/arg mistakes,
+#    not real failures worth flagging for retry-protection.
+_CLI_USAGE_ERROR_RE = re.compile(
+    r"(Usage:\s+\S|Try ['\"]?\S+ --help|Error: (Missing|Invalid|No such (option|command|argument)))",
+    re.IGNORECASE,
+)
+
+# 3. Bash exit code 1 on commands that conventionally exit-1 on no-match
+#    (grep, find -quit, test, head/tail on pipe closure). Hard to detect
+#    without parsing the command; conservatively skip Bash exits where the
+#    output is short AND non-traceback. Captured below in _is_noise.
+
+# 4. Tool names that should never be flagged. The agent invoking brain CLI to
+#    capture failures should not auto-flag the brain CLI invocations themselves
+#    (recursive noise). TodoWrite / Skill etc. are agent-internal and don't
+#    represent user-visible failures.
+_TOOL_BLOCKLIST = frozenset({
+    "TodoWrite", "Skill", "AskUserQuestion", "ToolSearch",
+    "TaskStop", "ScheduleWakeup", "PushNotification",
+})
+
+
+def _is_noise(target_problem: str, attempted_approach: str, outcome_evidence: str) -> bool:
+    """True if this failure candidate looks like noise rather than a real failure.
+
+    Filters (v0.8.5) — calibrated against ~60% FP rate observed in early sessions:
+      - System-injected target_problem (IDE markers, system reminders)
+      - Empty / whitespace-only target_problem
+      - Recursive Bash invocations of the brain CLI (self-flagging)
+      - Blocklisted tool names (TodoWrite etc — agent-internal)
+      - CLI usage errors (Usage:, Try '... --help', Error: Missing/Invalid argument)
+      - Very short outcome evidence with no traceback signature
+    """
+    if not target_problem.strip():
+        return True
+    if _SYSTEM_MARKER_RE.match(target_problem):
+        return True
+    tool, _, command = attempted_approach.partition(": ")
+    if tool in _TOOL_BLOCKLIST:
+        return True
+    # Bash invocations of the brain CLI itself — agent flagging its own brain calls.
+    if tool == "Bash" and command.lstrip().startswith("brain "):
+        return True
+    # CLI usage errors are agent flag-mistakes, not real failures.
+    if _CLI_USAGE_ERROR_RE.search(outcome_evidence):
+        return True
+    # Very short outcome that doesn't contain a real failure signature.
+    # grep no-match (exit 1, empty output) lands here.
+    if len(outcome_evidence.strip()) < 20 and not _FAILURE_PATTERNS.search(outcome_evidence):
+        return True
+    return False
+
 
 @dataclass(frozen=True)
 class FailureCandidate:
@@ -134,12 +198,17 @@ def scan_for_failures(path: Path, *, max_lines: int = 200) -> list[FailureCandid
                     approach = f"{name}: {cmd}"
                     if approach in seen_approaches:
                         continue
+                    target = _truncate(last_user_prompt, 400)
+                    approach_trunc = _truncate(approach, 200)
+                    evidence_trunc = _truncate(body, 600)
+                    if _is_noise(target, approach_trunc, evidence_trunc):
+                        continue
                     seen_approaches.add(approach)
                     candidates.append(
                         FailureCandidate(
-                            target_problem=_truncate(last_user_prompt, 400),
-                            attempted_approach=_truncate(approach, 200),
-                            outcome_evidence=_truncate(body, 600),
+                            target_problem=target,
+                            attempted_approach=approach_trunc,
+                            outcome_evidence=evidence_trunc,
                         )
                     )
             else:

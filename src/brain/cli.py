@@ -367,6 +367,7 @@ def ingest_backfill_cmd(
     click.echo(f"backfilling {len(rows)} sources...")
     embedder = BgeM3Embedder()
     ok = 0
+    multi_chunk_ids: list[int] = []
     for r in rows:
         summary = _ingest(
             ctx.obj["engine"],
@@ -376,12 +377,33 @@ def ingest_backfill_cmd(
             parent_max_tokens=parent_max_tokens,
         )
         ok += 1
+        if summary.chunks_created > 1:
+            multi_chunk_ids.append(summary.parent_source_id)
         click.echo(
             f"  source_id={summary.parent_source_id} "
             f"chunks={summary.chunks_created} "
             f"embeddings={summary.embeddings_inserted}"
         )
     click.echo(f"done: {ok}/{len(rows)} backfilled")
+
+    # v0.8.5: surface multi-chunk sources that got heuristic contexts. LLM-driven
+    # contexts (per Anthropic Contextual Retrieval, ~49% retrieval-failure
+    # reduction on multi-chunk docs) require agent-in-the-loop via the
+    # brain-ingest-contextual skill.
+    if multi_chunk_ids:
+        ids_str = " ".join(str(i) for i in multi_chunk_ids)
+        click.echo("")
+        click.echo(
+            f"[hint] {len(multi_chunk_ids)} multi-chunk source(s) used heuristic "
+            f"contexts only. For higher retrieval quality, run the contextual "
+            f"flow with the agent in the loop:"
+        )
+        click.echo(f"  Source IDs: {ids_str}")
+        click.echo(
+            "  Invoke the `agent-brain:brain-ingest-contextual` skill per source "
+            "(or call `brain ingest prepare-contexts <id>` then `brain ingest "
+            "finalize-contexts <id> --contexts <agent-generated-json>`)."
+        )
 
 
 @ingest.command("prepare-contexts")

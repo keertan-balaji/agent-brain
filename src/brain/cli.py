@@ -313,6 +313,46 @@ def revise_finalize_cmd(ctx: click.Context, cache_key: str, output: str) -> None
     click.echo(json.dumps(plan.model_dump(mode="json"), indent=2))
 
 
+@revise.command("prepare-from-diff")
+@click.option("--source-id", type=int, required=True)
+@click.option("--diff", required=True, help="Diff hunk (unified format) suspected of invalidating the source")
+@click.pass_context
+def revise_prepare_from_diff_cmd(ctx: click.Context, source_id: int, diff: str) -> None:
+    """Prepare a brain-revise prompt given a captured source + a diff hunk (v0.10.0)."""
+    from brain.embed.bge_m3 import BgeM3Embedder
+    from brain.reasoning.revise_from_diff import revise_prepare_from_diff as _prep
+
+    embedder = BgeM3Embedder()
+    bundle = _prep(
+        ctx.obj["engine"],
+        source_id=source_id,
+        diff_hunk=diff,
+        embedder=embedder,
+    )
+    payload = {
+        "cache_key": bundle.cache_key_hex,
+        "schema": bundle.schema_json,
+        "prompt": bundle.prompt,
+        "cached": bundle.cached.model_dump(mode="json") if bundle.cached else None,
+    }
+    click.echo(json.dumps(payload, indent=2))
+
+
+@revise.command("finalize-from-diff")
+@click.option("--cache-key", required=True)
+@click.option("--output", required=True)
+@click.pass_context
+def revise_finalize_from_diff_cmd(ctx: click.Context, cache_key: str, output: str) -> None:
+    from brain.reasoning.revise_from_diff import revise_finalize_from_diff as _fin
+
+    plan = _fin(
+        ctx.obj["engine"],
+        cache_key=bytes.fromhex(cache_key),
+        raw_output=output,
+    )
+    click.echo(json.dumps(plan.model_dump(mode="json"), indent=2))
+
+
 @main.group()
 @click.pass_context
 def ingest(ctx: click.Context) -> None:

@@ -308,6 +308,17 @@ brain revise finalize-from-diff --cache-key <hex> --output '<json>'
 
 Plan: `docs/superpowers/plans/2026-05-28-agent-brain-v0.10.x-quality-and-discipline.md`.
 
+## Agent Brain v0.10.1 — PreToolUse Auto-Recall
+
+A new PreToolUse hook fires before Bash / Edit / Write / MultiEdit tools. The hook extracts a topic heuristic from the tool input (`Bash`: first 4 non-flag tokens; `Edit`/`Write`/`MultiEdit`: file basename), runs a fast FTS-only `brain recall`, and injects the top-3 hits into the tool call's `additionalContext`. Removes the last bit of capture-recall discipline — agents see prior captures BEFORE acting, without manually invoking the brain-recall skill.
+
+Blocklisted tools (`TodoWrite`, `Skill`, `AskUserQuestion`, `ToolSearch`, `TaskStop`, `ScheduleWakeup`, `PushNotification`) are skipped. Empty / no-hit recall returns empty `additionalContext` — no spam. The hook is non-fatal (any recall error → empty context, never blocks the tool).
+
+```bash
+# No new CLI to learn — the hook fires automatically via hooks.json registration.
+git pull && /reload-plugins
+```
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-05-17-obsidian-second-brain-skill-pack-design.md`

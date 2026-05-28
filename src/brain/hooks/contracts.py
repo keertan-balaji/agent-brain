@@ -45,6 +45,11 @@ class PreCompactInput(_HookBase):
     custom_instructions: str | None = None
 
 
+class PreToolUseInput(_HookBase):
+    tool_name: str
+    tool_input: dict
+
+
 class SessionStartOutput(BaseModel):
     """Schema for the stdout JSON SessionStart emits."""
 

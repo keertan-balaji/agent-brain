@@ -3,14 +3,15 @@ read-only; routes never mutate. Returns Pydantic models for typed render."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import Engine, text
 
+from brain.compliance import under_captured_sessions, is_strict_mode
 from brain.db import session_scope
+from brain.staleness import scan_db
 
 _SUBSTANTIVE_KINDS = ["decision", "gotcha", "pattern", "note", "subtask_summary", "session_summary", "faq"]
 
@@ -117,8 +118,7 @@ def dashboard_stats(engine: Engine) -> DashboardStats:
             {"k": _SUBSTANTIVE_KINDS},
         ).all()
         spark_dict = {r[0]: int(r[1]) for r in spark_rows}
-        from datetime import date, timedelta
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         sparkline = [spark_dict.get(today - timedelta(days=29 - i), 0) for i in range(30)]
 
         last_30d_total = sum(sparkline)
@@ -132,8 +132,9 @@ def dashboard_stats(engine: Engine) -> DashboardStats:
             {"k": _SUBSTANTIVE_KINDS},
         ).scalar() or 0
 
-        # Compliance
-        from brain.compliance import under_captured_sessions, is_strict_mode
+        # NOTE: these helpers each open their own session_scope, so this function
+        # briefly holds up to 4 simultaneous pool connections. Acceptable for a
+        # single-user local dashboard; revisit if pool pressure shows up in prod.
         uc = len(under_captured_sessions(engine, limit=200))
         thin = s.execute(
             text(
@@ -144,7 +145,6 @@ def dashboard_stats(engine: Engine) -> DashboardStats:
         strict = is_strict_mode(engine)
 
         # Staleness
-        from brain.staleness import scan_db
         report = scan_db(engine)
         by_status: dict[str, int] = {"changed": 0, "missing": 0, "untracked": 0}
         for sx in report.stale_sources:
@@ -226,7 +226,10 @@ class SourceRow(BaseModel):
     content_preview: str
     created_at: datetime
     embedded: bool
-    stale_status: str | None  # "changed" | "missing" | "untracked" | None
+    # NOTE: stale_status is populated by the route layer (Task 3) using a
+    # cached scan_db() per request, not by list_sources itself — joining
+    # the full staleness scan into every list query is too expensive.
+    stale_status: str | None = None  # "changed" | "missing" | "untracked" | None
 
 
 class SourcePage(BaseModel):
@@ -247,6 +250,12 @@ def list_sources(
     if kind:
         where.append("kind = :kind")
         params["kind"] = kind
+    if embedded_only:
+        where.append(
+            "EXISTS (SELECT 1 FROM embeddings_1024 e "
+            "JOIN sources child ON child.id = e.source_id "
+            "WHERE child.parent_id = s.id OR child.id = s.id)"
+        )
     where_sql = " AND ".join(where)
 
     sql = (
@@ -274,7 +283,6 @@ def list_sources(
                 content_preview=str(r.preview or ""),
                 created_at=r.created_at,
                 embedded=bool(r.embedded),
-                stale_status=None,
             )
             for r in rows
         ],
@@ -299,7 +307,7 @@ class SourceDetail(BaseModel):
     generation_depth: int
     provenance_kind: str
     project_id: int | None
-    provenance_meta: dict | None
+    provenance_meta: dict[str, Any] | None
 
 
 def source_by_id(engine: Engine, *, source_id: int) -> SourceDetail | None:
@@ -334,10 +342,9 @@ def source_by_id(engine: Engine, *, source_id: int) -> SourceDetail | None:
 # ============ Helpers ============
 
 def _relative_time(dt: datetime) -> str:
-    from datetime import datetime as _dt, timezone as _tz
-    now = _dt.now(_tz.utc)
+    now = datetime.now(timezone.utc)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_tz.utc)
+        dt = dt.replace(tzinfo=timezone.utc)
     delta = now - dt
     secs = int(delta.total_seconds())
     if secs < 60:

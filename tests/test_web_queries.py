@@ -73,3 +73,27 @@ def test_source_by_id_returns_full_detail(pg_url: str) -> None:
 def test_source_by_id_returns_none_when_absent(pg_url: str) -> None:
     engine = get_engine(pg_url)
     assert source_by_id(engine, source_id=999_999) is None
+
+
+def test_list_sources_embedded_only_filter(pg_url: str) -> None:
+    from brain.db import session_scope, get_engine
+    engine = get_engine(pg_url)
+    # Seed two decisions; embed only one via a synthetic embeddings_1024 row.
+    sid_emb = _seed_decision(engine, "embedded-one", uri="decision://emb-1")
+    sid_no  = _seed_decision(engine, "unembedded-one", uri="decision://emb-2")
+    with session_scope(engine) as s:
+        # Insert a halfvec(1024) row directly using the same CAST pattern as ingest.py.
+        # The vec column is HALFVEC(1024) NOT NULL; model_id/model_ver are required PKs.
+        zeros = "[" + ",".join(["0"] * 1024) + "]"
+        s.execute(
+            text(
+                "INSERT INTO embeddings_1024(source_id, model_id, model_ver, vec) "
+                "VALUES (:i, 'test-model', 'v0', CAST(:v AS halfvec)) "
+                "ON CONFLICT (source_id, model_id, model_ver) DO NOTHING"
+            ),
+            {"i": sid_emb, "v": zeros},
+        )
+    only_emb = list_sources(engine, embedded_only=True, page=1, per_page=20)
+    ids_emb = {r.id for r in only_emb.rows}
+    assert sid_emb in ids_emb
+    assert sid_no  not in ids_emb

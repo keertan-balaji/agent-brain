@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from brain import failures
 from brain.compliance import is_strict_mode, is_thin_bundle, is_under_captured, session_capture_stats
+from brain.staleness import scan_db as _scan_db_staleness
 from brain.db import session_scope
 from brain.hooks.bundle import gather_bundle_selection
 from brain.hooks.transcript_scan import scan_for_failures
@@ -145,6 +146,33 @@ def session_end_cmd(ctx: click.Context) -> None:
             record_event(
                 engine, session_id=int(sid), event_kind="hook_error",
                 payload={"hook": "session_end", "error": str(exc)[:500]},
+            )
+
+        # v0.9.0: Staleness check — flag sources whose source-files changed since capture.
+        try:
+            sreport = _scan_db_staleness(engine)
+            if sreport.stale_sources:
+                record_event(
+                    engine, session_id=int(sid), event_kind="staleness_detected",
+                    payload={
+                        "stale_count": len(sreport.stale_sources),
+                        "scanned_sources": sreport.scanned_sources,
+                        "scanned_files": sreport.scanned_files,
+                        "stale_sources": [
+                            {
+                                "source_id": s.source_id,
+                                "kind": s.kind,
+                                "path": s.path,
+                                "status": s.status,
+                            }
+                            for s in sreport.stale_sources[:50]  # cap payload size
+                        ],
+                    },
+                )
+        except Exception as _stale_exc:  # noqa: BLE001 — hook stays non-fatal
+            record_event(
+                engine, session_id=int(sid), event_kind="hook_error",
+                payload={"hook": "session_end_staleness", "error": str(_stale_exc)[:500]},
             )
 
     _emit_noop()

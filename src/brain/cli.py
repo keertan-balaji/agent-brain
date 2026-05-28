@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess as _subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from brain.config import load_config
 from brain.db import get_engine
 from brain import compliance as _compliance
 from brain import failures as _failures
+from brain import staleness as _staleness
+from brain.provenance import attach_provenance as _attach_provenance
 from brain.helpers.entity_timeline import entity_timeline as _entity_timeline
 from brain.helpers.health import audit as _audit
 from brain.hooks.cli import hook as _hook_group
@@ -43,6 +46,11 @@ def main(ctx: click.Context) -> None:
 @click.option("--uri")
 @click.option("--project-id", type=int)
 @click.option("--bucket", multiple=True, help="Repeatable: --bucket semantic --bucket episodic")
+@click.option(
+    "--from-file",
+    multiple=True,
+    help="File this knowledge was extracted from. Format: '/abs/path' or '/abs/path:start-end'. Repeatable.",
+)
 @click.pass_context
 def write(
     ctx: click.Context,
@@ -51,8 +59,10 @@ def write(
     uri: str | None,
     project_id: int | None,
     bucket: tuple[str, ...],
+    from_file: tuple[str, ...],
 ) -> None:
-    """Capture a source into the brain. Substantive kinds auto-embed (v0.8.4)."""
+    """Capture a source into the brain. Substantive kinds auto-embed (v0.8.4).
+    --from-file attaches provenance for staleness tracking (v0.9.0)."""
     result = _write(
         ctx.obj["engine"],
         SourceInput(
@@ -64,6 +74,39 @@ def write(
         ),
         auto_embed=True,
     )
+    if from_file:
+        source_files: list[dict] = []
+        for spec in from_file:
+            path, _, lines = spec.partition(":")
+            entry: dict = {"path": path}
+            if lines and "-" in lines:
+                a, _, b = lines.partition("-")
+                try:
+                    entry["line_range"] = [int(a), int(b)]
+                except ValueError:
+                    pass
+            source_files.append(entry)
+        commit = None
+        try:
+            commit = _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], text=True, stderr=_subprocess.DEVNULL
+            ).strip()
+        except (_subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        branch = None
+        try:
+            branch = _subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True, stderr=_subprocess.DEVNULL
+            ).strip()
+        except (_subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        _attach_provenance(
+            ctx.obj["engine"],
+            source_id=result.source_id,
+            source_files=source_files,
+            commit_at_capture=commit,
+            branch_at_capture=branch,
+        )
     click.echo(json.dumps(result.model_dump()))
 
 
@@ -1062,6 +1105,54 @@ def compliance_list_thin(ctx: click.Context, limit: int) -> None:
             f"[{r.session_id}] cc={r.cc_session_id or '-'} "
             f"project={r.project_id or '-'} at={r.occurred_at:%Y-%m-%d %H:%M}"
         )
+
+
+@main.group()
+def staleness() -> None:
+    """Detect when captured knowledge has gone stale (file changed since capture)."""
+
+
+@staleness.command("check")
+@click.pass_context
+def staleness_check(ctx: click.Context) -> None:
+    """Whole-DB sweep — every active source with provenance_meta hash-compared
+    against the live filesystem."""
+    report = _staleness.scan_db(ctx.obj["engine"])
+    click.echo(
+        f"scanned {report.scanned_sources} sources / {report.scanned_files} file references"
+    )
+    if not report.stale_sources:
+        click.echo("0 stale sources — all tracked files match capture-time hashes.")
+        return
+    click.echo(f"{len(report.stale_sources)} stale source(s):")
+    for s in report.stale_sources:
+        line = f"  [{s.source_id}] kind={s.kind} status={s.status} path={s.path}"
+        if s.line_range:
+            line += f" lines={s.line_range[0]}-{s.line_range[1]}"
+        click.echo(line)
+
+
+@staleness.command("diff")
+@click.option("--since", "since_ref", default="HEAD~1", help="git ref to diff against (default HEAD~1)")
+@click.option("--cwd", "repo_cwd", default=None, help="repo cwd (default: current dir)")
+@click.pass_context
+def staleness_diff(ctx: click.Context, since_ref: str, repo_cwd: str | None) -> None:
+    """Diff-based — only inspects files changed since the given git ref. Fast."""
+    report = _staleness.scan_diff(
+        ctx.obj["engine"], since_ref=since_ref, repo_cwd=repo_cwd
+    )
+    click.echo(
+        f"scanned {report.scanned_files} changed files / {report.scanned_sources} matching sources"
+    )
+    if not report.stale_sources:
+        click.echo("0 stale sources from the diff.")
+        return
+    click.echo(f"{len(report.stale_sources)} stale source(s):")
+    for s in report.stale_sources:
+        line = f"  [{s.source_id}] kind={s.kind} status={s.status} path={s.path}"
+        if s.line_range:
+            line += f" lines={s.line_range[0]}-{s.line_range[1]}"
+        click.echo(line)
 
 
 main.add_command(_hook_group)

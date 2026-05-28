@@ -276,7 +276,24 @@ brain compliance list-thin [--limit N]
 
 Operations: `docs/phase3a_4.md`. Plan: `docs/superpowers/plans/2026-05-27-agent-brain-v2-phase-3a-4.md`.
 
-Follow-on plan queued: 3a-3 (file watcher).
+## Agent Brain v0.9.0 — Code-Aware Staleness
+
+`brain write --from-file path[:lines]` attaches sha256 + commit-at-capture to a source's `provenance_meta`. `brain staleness diff --since <ref>` (cheap, git-driven) and `brain staleness check` (whole-DB) flag captures whose referenced files have changed since capture. SessionEnd hook auto-runs the scan and records a `staleness_detected` event; the next session's resume bundle surfaces the count + a list of source IDs. No LLM in the scan path — just hash + git diff.
+
+```bash
+# Capture with provenance.
+brain write --kind decision --content "..." --from-file src/cli.py:42-67
+
+# Diff-based scan after edits.
+brain staleness diff --since HEAD~5
+
+# Whole-DB audit.
+brain staleness check
+```
+
+New skill: `brain-staleness` (triage surface). Operations: `docs/v0.9.0-staleness.md`. Plan: `docs/superpowers/plans/2026-05-28-agent-brain-v0.9.0-staleness.md`.
+
+Follow-on plan queued: 3a-3 (Obsidian file watcher — vault-side, different from code staleness).
 
 ## Design docs
 

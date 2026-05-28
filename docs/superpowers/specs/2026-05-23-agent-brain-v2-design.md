@@ -1133,76 +1133,116 @@ The migration script is idempotent and re-runnable. **Wikilink failure handling:
 
 The build ships in 6 phases (Phase 3 split into 3a/3b/3c per review). Each phase produces working software.
 
-### Phase 1 — Foundation (v2.0)
+### Implementation status table (2026-05-28, current = v0.10.1)
+
+| Phase | Status | Tag | Notes |
+|---|---|---|---|
+| **Phase 1 — Foundation** | ✅ shipped | v0.2.0 | All bullets complete |
+| **Phase 2 — Hybrid retrieval + Fast-tier reasoning** | ✅ shipped | v0.3-0.5 (pivot 2.5) | All bullets complete; agent-driven pivot in Phase 2.5 |
+| **Phase 3a-1 — Compaction-survival core** | ✅ shipped | v0.5.0 | Hooks + bundles + 3 lifecycle skills |
+| **Phase 3a-2 — Failure capture + sanitization** | ✅ shipped | v0.6.0 | `brain-failure` skill + Stop-hook auto-flag + ANSI/density/origin-quoting |
+| **Phase 3a-3 — Obsidian file watcher** | ❌ pending | — | Originally planned; never implemented. Vault→DB sync still manual |
+| **Phase 3a-4 — Compliance subsystem** | ✅ shipped | v0.7.0 | `under_captured`/`thin_session`/`strict_mode`/`brain-compliance` |
+| **Phase 3b — Retrieval hardening (Deep tier)** | ⚠️ partial | — | See per-bullet annotations below |
+| **Phase 3c — Multi-vector retrieval** | ❌ pending | — | BGE-M3 sparse + ColBERT + late chunking + HyDE all unshipped |
+| **Phase 4 — Power features + multi-platform** | ❌ pending | — | None of the bullets shipped |
+
+### Out-of-spec extensions shipped (session-derived, 2026-05-27 / 2026-05-28)
+
+| Item | Tag | What |
+|---|---|---|
+| `/using-agent-brain` skill + `/brain` slash command | v0.8.0/v0.8.1 | Active capture-recall discipline at session start |
+| Bug-cleanup release | v0.8.2 | Isolated `brain_test` DB (was wiping dev brain), psql/Docker docs, TRUNCATE deadlock retry, dropped `session_events_kind_check` |
+| Option G retrieval stack (wired hybrid recall as default) | v0.8.3 | `brain recall` CLI now defaults to FTS+BGE-M3+RRF+rerank; `bge-reranker-v2-m3` auto-selected on ≤6GB GPUs; per-reranker tau calibration; `brain ingest backfill` |
+| Auto-embed + heuristic contextual ingest | v0.8.4 | Substantive captures auto-embed on `brain write`; multi-chunk sources get `[From <kind>] [Section: <md-header>]` prefix per chunk |
+| Stop-hook noise filters | v0.8.5 | 6 filters (system markers, blocklisted tools, recursive brain CLI, CLI-usage errors, etc.) cut FP rate ~66% → <10% |
+| Code-aware staleness | v0.9.0 | `sources.provenance_meta` + `brain write --from-file` + `brain staleness check/diff` + SessionEnd records `staleness_detected` event |
+| **`brain revise --from-diff`** | v0.10.0 | Extension of Phase 2.5 brain-revise; closes the semantic gap between staleness (file changed) and certainty (claim invalidated). NOT in original spec. |
+| **PreToolUse auto-recall hook** | v0.10.1 | Hook fires before Bash/Edit/Write/MultiEdit, runs FTS-only `brain recall` on a topic heuristic, injects top-3 into `additionalContext`. NOT in original spec. |
+
+### Phase 1 — Foundation (v2.0) — ✅ SHIPPED in v0.2.0
 
 Schema scope: `sources` (with `project_id`, `status`, `provenance_kind`, `generation_depth`, `flags`), `sources_fts`, `source_projects` (M2M), `memory_classifications`, `projects`, `sessions`, `subtasks`, `events` (with `procedure_id` FK), `failure_memories`, `procedures` (created empty; populated by user-authored imports in Phase 1, by `distill_pattern`/`propose_skill` from Phase 4), **`entities` and `edges`** (Phase 1 includes minimal entity/edge tables to support `entity_timeline` and `brain-decompose-document` building blocks; LLM-based extraction lands Phase 2), `retrieval_log`, `brain_config`. **Does not include** `embeddings_1024` or HNSW index — pgvector install can be a Phase 1 dependency (extension is created) but no embedding rows are written yet, no HNSW index is built.
 
-- Postgres install + `vector` + `pg_trgm` extensions (via setup skill, optional `docker-compose.yml` provided)
-- Schema migrations (alembic): all Phase-1 tables above + the `vector` extension declaration so Phase 2's migration is a single `CREATE TABLE` away
-- Python package skeleton (`brain/` Python module)
-- `brain.write` / `brain.read` low-level API (text-only path, enforces `generation_depth` computation and depth-3 reject)
-- FTS retrieval (full §Retrieval pipeline minus embedding/RRF/rerank)
-- Migrate v1 markdown content into DB (per §Migration from v1.0)
-- Obsidian markdown view (lossless export, co-equal DR substrate)
-- `brain-setup`, `brain-recall`, **`brain-health`** (basic audit: orphan rows, FK integrity, size-by-table, under-captured-session warnings per §Compliance), and **`entity_timeline`** helper (pure SQL, no LLM dependency) skills
+- [x] Postgres install + `vector` + `pg_trgm` extensions (via setup skill, optional `docker-compose.yml` provided)
+- [x] Schema migrations (alembic): all Phase-1 tables above + the `vector` extension declaration so Phase 2's migration is a single `CREATE TABLE` away
+- [x] Python package skeleton (`brain/` Python module)
+- [x] `brain.write` / `brain.read` low-level API (text-only path, enforces `generation_depth` computation and depth-3 reject)
+- [x] FTS retrieval (full §Retrieval pipeline minus embedding/RRF/rerank)
+- [x] Migrate v1 markdown content into DB (per §Migration from v1.0)
+- [x] Obsidian markdown view (lossless export, co-equal DR substrate)
+- [x] `brain-setup`, `brain-recall`, **`brain-health`** (basic audit: orphan rows, FK integrity, size-by-table, under-captured-session warnings per §Compliance), and **`entity_timeline`** helper (pure SQL, no LLM dependency) skills
 
-### Phase 2 — Hybrid retrieval + Fast-tier reasoning
+### Phase 2 — Hybrid retrieval + Fast-tier reasoning — ✅ SHIPPED in v0.3-0.5
 
-- Alembic migration adding `embeddings_1024` + HNSW index + `extracted_claims` + `reasoning_cache`
-- pgvector embeddings via **BGE-M3** (local, Apache-2.0, dense leg first; 1024d HALFVEC)
-- **Parent-document chunking** (128–256-tok children, 512–1024-tok parents)
-- **Contextual Retrieval** (per-chunk context summary prepended before embedding)
-- RRF fusion of FTS + dense candidates
-- **mxbai-rerank-large-v2** cross-encoder on top 30–50
-- Per-bucket τ thresholds + abstain
-- **Synthesized-content retrieval down-weight** (provenance-aware RRF multiplier using `generation_depth`, depth-3 cap, 60% result-set diversity cap) — required for `brain-promote-answer` safety; both ship together
-- Reasoning helpers Fast-tier: `summarize`, `compare`, `cite`, `propose_links`, **`revise_on_ingest`** (paired with `brain-promote-answer` — both write `synthesized` rows, both rely on the down-weight) (with grounding policy + structured JSON outputs)
-- `brain-link`, `brain-decide`, `brain-status` skills
-- `brain-health` extended with τ-rolling-ratio reports per bucket (full audit + compliance signal stays from Phase 1)
-- **`brain-promote-answer`** skill — promotes a high-confidence `reasoning_cache` entry into a permanent `sources` row with `provenance_kind='synthesized'` and `synthesized_from = [input_source_ids]`. Human-gated. Closes the "good answers shouldn't disappear into chat history" gap. Safe because the down-weight ships in the same phase.
-- **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. The schema tables (`entities`, `edges`) ship in Phase 1; the LLM-driven `extract_claims` + `extract_entities` helpers ship in Phase 2 — this skill arrives in Phase 2 as the named composition + ships a default Obsidian render template.
+- [x] Alembic migration adding `embeddings_1024` + HNSW index + `extracted_claims` + `reasoning_cache`
+- [x] pgvector embeddings via **BGE-M3** (local, Apache-2.0, dense leg first; 1024d HALFVEC)
+- [x] **Parent-document chunking** (128–256-tok children, 512–1024-tok parents)
+- [x] **Contextual Retrieval** (per-chunk context summary prepended before embedding) — heuristic contextual ships in v0.8.4; LLM-driven via `brain-ingest-contextual` skill (agent-in-loop)
+- [x] RRF fusion of FTS + dense candidates
+- [x] **mxbai-rerank-large-v2** cross-encoder on top 30–50 — auto-fallback to `bge-reranker-v2-m3` on ≤6GB GPUs (v0.8.3)
+- [x] Per-bucket τ thresholds + abstain — per-reranker tau defaults (v0.8.3)
+- [x] **Synthesized-content retrieval down-weight** (provenance-aware RRF multiplier using `generation_depth`, depth-3 cap, 60% result-set diversity cap) — required for `brain-promote-answer` safety; both ship together
+- [x] Reasoning helpers Fast-tier: `summarize`, `compare`, `cite`, `propose_links`, **`revise_on_ingest`** (paired with `brain-promote-answer` — both write `synthesized` rows, both rely on the down-weight) (with grounding policy + structured JSON outputs)
+- [x] `brain-link`, `brain-decide`, `brain-status` skills
+- [x] `brain-health` extended with τ-rolling-ratio reports per bucket (full audit + compliance signal stays from Phase 1)
+- [x] **`brain-promote-answer`** skill — promotes a high-confidence `reasoning_cache` entry into a permanent `sources` row with `provenance_kind='synthesized'` and `synthesized_from = [input_source_ids]`. Human-gated. Closes the "good answers shouldn't disappear into chat history" gap. Safe because the down-weight ships in the same phase.
+- [x] **`brain-decompose-document`** skill — composite that takes an unfamiliar document (PDF, markdown, web page) and produces an interconnected slice of the brain: ingests the source, runs `extract_claims`, identifies entities (people, concepts, terms), creates an `entities`+`edges` subgraph, and renders Obsidian markdown files with wikilinks back to a central index note. The exact composition: `brain.ingest(path) → extract_claims(source_id) → extract_entities(source_id) → upsert edges → obsidian_export(subgraph)`. Used for: reading a paper into the brain, mapping a new repo's README into a project shell, importing external research artifacts. The schema tables (`entities`, `edges`) ship in Phase 1; the LLM-driven `extract_claims` + `extract_entities` helpers ship in Phase 2 — this skill arrives in Phase 2 as the named composition + ships a default Obsidian render template.
 
-**Post-ship pivot (Phase 2.5):** all five reasoning helpers and Contextual Retrieval were refactored to be agent-driven. The brain prepares the prompt + JSON schema + cache key; the calling agent synthesizes inline; the brain validates and persists. `AnthropicClient`, `BudgetExceeded`, `cost_log`, and the `anthropic` / `pyyaml` dependencies were removed. The schema (embeddings_1024, extracted_claims, reasoning_cache) and the retrieval pipeline (FTS + dense + RRF + cross-encoder + provenance defenses + tau abstain) are unchanged. See `docs/phase2_5.md` and `docs/superpowers/plans/2026-05-24-agent-brain-v2-phase-2-5.md`.
+**Post-ship pivot (Phase 2.5):** ✅ all five reasoning helpers and Contextual Retrieval were refactored to be agent-driven. The brain prepares the prompt + JSON schema + cache key; the calling agent synthesizes inline; the brain validates and persists. `AnthropicClient`, `BudgetExceeded`, `cost_log`, and the `anthropic` / `pyyaml` dependencies were removed. The schema (embeddings_1024, extracted_claims, reasoning_cache) and the retrieval pipeline (FTS + dense + RRF + cross-encoder + provenance defenses + tau abstain) are unchanged. See `docs/phase2_5.md` and `docs/superpowers/plans/2026-05-24-agent-brain-v2-phase-2-5.md`.
 
 ### Phase 3a — Capture fidelity + compaction-survival (the cognition-preservation core)
 
-- Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart, SessionEnd) — installable opt-in. Note: `SessionStart` delivers the bundle into agent context via `additionalContext`; `PreCompact` only *persists* the bundle (no documented stdout-injection channel).
-- `session_resume_bundles` generator with the full selection algorithm and token-budget enforcement
-- Failure-memory capture flow (`brain-failure` skill + auto-flag from `Stop` hook)
-- File-watcher (Obsidian-side edits → DB update with conflict detection)
-- Compliance subsystem (under-captured session detection + warnings)
-- `brain-session-log`, `brain-session-resume`, `brain-handoff` skills
-- Sanitization minimum (ANSI stripping + instruction-density flagging + origin-aware retrieval quoting)
+- [x] Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart, SessionEnd) — installable opt-in (3a-1 v0.5.0). Note: `SessionStart` delivers the bundle into agent context via `additionalContext`; `PreCompact` only *persists* the bundle (no documented stdout-injection channel). **Out-of-spec addition:** PreToolUse hook auto-injects recall (v0.10.1).
+- [x] `session_resume_bundles` generator with the full selection algorithm and token-budget enforcement (3a-1 v0.5.0)
+- [x] Failure-memory capture flow (`brain-failure` skill + auto-flag from `Stop` hook) (3a-2 v0.6.0); Stop-hook noise filters (v0.8.5) further refine
+- [ ] **PENDING** — File-watcher (Obsidian-side edits → DB update with conflict detection). **Originally Phase 3a-3; never implemented.** Code staleness via `brain staleness` (v0.9.0) is the code-side analogue but does not cover Obsidian vault edits.
+- [x] Compliance subsystem (under-captured session detection + warnings) (3a-4 v0.7.0)
+- [x] `brain-session-log`, `brain-session-resume`, `brain-handoff` skills (3a-1 v0.5.0)
+- [x] Sanitization minimum (ANSI stripping + instruction-density flagging + origin-aware retrieval quoting) (3a-2 v0.6.0)
 
-### Phase 3b — Retrieval hardening (Deep tier)
+### Phase 3b — Retrieval hardening (Deep tier) — ⚠️ PARTIAL
 
-- Multi-query fusion (3–5 LLM-generated query variants, RRF-fused)
-- Self-Query (LLM extracts structured filters from query text)
-- CRAG verification gate (conditional per §Retrieval hardening trigger conditions)
-- `brain-recall --deep` tier integration
-- Eval harness: hand-curated 50–100-question set + LongMemEval + MemoryAgentBench cross-comparison
+- [ ] **PENDING** — Multi-query fusion (3–5 LLM-generated query variants, RRF-fused)
+- [ ] **PENDING** — Self-Query (LLM extracts structured filters from query text)
+- [ ] **PENDING** — CRAG verification gate (conditional per §Retrieval hardening trigger conditions)
+- [ ] **PENDING** — `brain-recall --deep` tier integration
+- [x] Eval harness: 20-question hand-curated set against this repo's content shipped in v0.8.3 (see `eval/questions.yaml` + `eval/run_ab.py`). **PENDING** — extension to 50–100 questions + LongMemEval + MemoryAgentBench cross-comparison.
 
-### Phase 3c — Multi-vector retrieval + agent-memory chunking
+### Phase 3c — Multi-vector retrieval + agent-memory chunking — ❌ PENDING
 
-- BGE-M3 sparse + ColBERT legs (triple-leg RRF + multi-vector rerank via VectorChord)
-- Late chunking for agent-memory notes (long-context model embeds whole note, then splits)
-- HyDE for keyword-poor queries (conditional)
-- Query decomposition for multi-hop queries
+- [ ] BGE-M3 sparse + ColBERT legs (triple-leg RRF + multi-vector rerank via VectorChord)
+- [ ] Late chunking for agent-memory notes (long-context model embeds whole note, then splits)
+- [ ] HyDE for keyword-poor queries (conditional)
+- [ ] Query decomposition for multi-hop queries
 
-### Phase 4 — Power features + multi-platform + maintenance loops
+### Phase 4 — Power features + multi-platform + maintenance loops — ❌ PENDING
 
-- Tree-sitter symbol index (Python helper, populated `entities` + `edges`)
-- Knowledge-graph traversal helpers (`brain-graph-walk`)
-- **`brain-health --lint` (generative lint)** — the basic `brain-health` shipped in Phase 1, the τ reports in Phase 2; Phase 4 adds the `--lint` mode: nightly NLI pass over top-k semantically similar chunks (knowledgebase_guardian pattern, contradiction surfacing) + `identify_gaps` + `find_contradictions` orchestration. **Surfaces results as user-facing questions** (ARIA pattern: "is X still true given Y? [yes/no]"), not silent flags. Tunable per §Retrieval hardening to a target false-positive rate (ClueBot NG framing: 10 missed contradictions beat 1 spurious user prompt).
-- **`brain-schema-evolve`** skill — periodic (or user-invoked) reviews `retrieval_log` patterns, capture-failure stats (under-captured sessions per §Compliance), rejected `brain-promote-answer` / `revise_on_ingest` proposals, and `events.kind='user_correction'` rows to propose specific `_meta/AGENTS.md` amendments. Treats schema as living code, not scripture. Human-gated. Closes the LLM-Wiki article's "schema co-evolution" pattern.
-- **`brain-sleep-time`** (Letta sleep-time-compute pattern, arxiv 2504.13171) — background pass during idle: (a) **FAQs** written to `sources` with `kind='faq'`, `provenance_kind='synthesized'`, `synthesized_from = [source_ids]` (participate in down-weight + depth cap), (b) **distilled summaries** cached in `reasoning_cache`, (c) **resume-bundle refresh** for active projects via `session_resume_bundles`. Amortizes ~2.5× cost on later queries. Opt-in via `brain_config.sleep_time_compute=true`. Cost-capped per §Operational concerns.
-- MCP server (exports brain tools to Cursor/Gemini/Codex)
-- Codex CLI hook adapter
-- Cross-tool handoff format (portable export)
-- Sanitization hardening (structural anomaly detection, optional reject mode, trust scores)
-- Hard-negative mining + fine-tuning (when query log has enough labeled examples)
+- [ ] Tree-sitter symbol index (Python helper, populated `entities` + `edges`)
+- [ ] Knowledge-graph traversal helpers (`brain-graph-walk`)
+- [ ] **`brain-health --lint` (generative lint)** — the basic `brain-health` shipped in Phase 1, the τ reports in Phase 2; Phase 4 adds the `--lint` mode: nightly NLI pass over top-k semantically similar chunks (knowledgebase_guardian pattern, contradiction surfacing) + `identify_gaps` + `find_contradictions` orchestration. **Surfaces results as user-facing questions** (ARIA pattern: "is X still true given Y? [yes/no]"), not silent flags. Tunable per §Retrieval hardening to a target false-positive rate (ClueBot NG framing: 10 missed contradictions beat 1 spurious user prompt).
+- [ ] **`brain-schema-evolve`** skill — periodic (or user-invoked) reviews `retrieval_log` patterns, capture-failure stats (under-captured sessions per §Compliance), rejected `brain-promote-answer` / `revise_on_ingest` proposals, and `events.kind='user_correction'` rows to propose specific `_meta/AGENTS.md` amendments. Treats schema as living code, not scripture. Human-gated. Closes the LLM-Wiki article's "schema co-evolution" pattern.
+- [ ] **`brain-sleep-time`** (Letta sleep-time-compute pattern, arxiv 2504.13171) — background pass during idle: (a) **FAQs** written to `sources` with `kind='faq'`, `provenance_kind='synthesized'`, `synthesized_from = [source_ids]` (participate in down-weight + depth cap), (b) **distilled summaries** cached in `reasoning_cache`, (c) **resume-bundle refresh** for active projects via `session_resume_bundles`. Amortizes ~2.5× cost on later queries. Opt-in via `brain_config.sleep_time_compute=true`. Cost-capped per §Operational concerns.
+- [ ] MCP server (exports brain tools to Cursor/Gemini/Codex)
+- [ ] Codex CLI hook adapter
+- [ ] Cross-tool handoff format (portable export)
+- [ ] Sanitization hardening (structural anomaly detection, optional reject mode, trust scores) — Phase 3a-2 ships the minimum; Phase 4 hardening pending
+- [ ] Hard-negative mining + fine-tuning (when query log has enough labeled examples)
 
 Each phase is one implementation plan, written after this spec is approved. Phase 3a is the highest-priority cognition-preservation work; Phase 3b and 3c can land in either order.
+
+### Summary as of v0.10.1 (2026-05-28)
+
+| Bucket | Done | Pending | Total |
+|---|---|---|---|
+| Phase 1 | 8/8 | 0 | 8 |
+| Phase 2 | 13/13 | 0 | 13 |
+| Phase 3a (1+2+4) | 6/7 | 1 (Obsidian file watcher) | 7 |
+| Phase 3b | 1/5 | 4 (multi-query, self-query, CRAG, --deep wrapper) + eval-50Q | 5 |
+| Phase 3c | 0/4 | 4 | 4 |
+| Phase 4 | 0/9 | 9 | 9 |
+| **Spec total** | **28/46** (61%) | **18** | **46** |
+| Out-of-spec extensions shipped | 8 | — | — |
 
 ## Test plan
 

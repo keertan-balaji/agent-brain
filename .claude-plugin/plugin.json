@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — v0.10.0 adds `brain revise prepare-from-diff` / `finalize-from-diff` so when staleness flags a captured source as changed, the agent-driven revise helper proposes structured invalidations / reassertions / creations from the diff hunk. Closes the semantic gap between staleness (file changed) and certainty (claim invalidated).",
-  "version": "0.10.0",
+  "description": "Persistent cognition store for AI coding agents — v0.10.1 adds a PreToolUse hook that auto-injects brain recall hits as additionalContext before Bash/Edit/Write/MultiEdit fires. Removes the last bit of capture-recall discipline: agents see prior captures BEFORE acting, without manually invoking brain-recall.",
+  "version": "0.10.1",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

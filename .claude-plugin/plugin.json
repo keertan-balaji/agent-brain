@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — v0.9.0 adds code-aware staleness: `brain write --from-file` attaches sha256 + commit-at-capture to sources; `brain staleness diff/check` flags captures whose source files changed; SessionEnd hook surfaces stale sources in the next session's resume bundle.",
-  "version": "0.9.0",
+  "description": "Persistent cognition store for AI coding agents — v0.10.0 adds `brain revise prepare-from-diff` / `finalize-from-diff` so when staleness flags a captured source as changed, the agent-driven revise helper proposes structured invalidations / reassertions / creations from the diff hunk. Closes the semantic gap between staleness (file changed) and certainty (claim invalidated).",
+  "version": "0.10.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

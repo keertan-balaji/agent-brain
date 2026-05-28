@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers.",
-    "version": "0.8.5"
+    "version": "0.9.0"
   },
   "plugins": [
     {
@@ -15,8 +15,8 @@
         "source": "url",
         "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "v0.8.5: Stop-hook noise filters cut auto-flagged FP rate from ~66% to <10% (system markers, recursive brain CLI, blocklisted tools, CLI-usage errors). Plus v0.8.4's auto-embed on substantive captures + heuristic contextual ingest + v0.8.3's full hybrid retrieval CLI default. hit@5 = 25% → 100% on 16-Q eval. 18 brain-* + 5 obsidian-* skills.",
-      "version": "0.8.5",
+      "description": "v0.9.0: code-aware staleness — `brain write --from-file` + `brain staleness check/diff` + SessionEnd surfaces stale captures in resume bundle. Plus v0.8.5 Stop-hook noise filters + v0.8.4 auto-embed + v0.8.3 hybrid recall CLI default. hit@5 = 25% → 100% on 16-Q eval. 19 brain-* + 5 obsidian-* skills.",
+      "version": "0.9.0",
       "strict": true
     }
   ]

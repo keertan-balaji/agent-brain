@@ -1196,7 +1196,7 @@ Schema scope: `sources` (with `project_id`, `status`, `provenance_kind`, `genera
 - [x] Claude Code hooks (PostToolUse, PreCompact, Stop, SessionStart, SessionEnd) — installable opt-in (3a-1 v0.5.0). Note: `SessionStart` delivers the bundle into agent context via `additionalContext`; `PreCompact` only *persists* the bundle (no documented stdout-injection channel). **Out-of-spec addition:** PreToolUse hook auto-injects recall (v0.10.1).
 - [x] `session_resume_bundles` generator with the full selection algorithm and token-budget enforcement (3a-1 v0.5.0)
 - [x] Failure-memory capture flow (`brain-failure` skill + auto-flag from `Stop` hook) (3a-2 v0.6.0); Stop-hook noise filters (v0.8.5) further refine
-- [ ] **PENDING** — File-watcher (Obsidian-side edits → DB update with conflict detection). **Originally Phase 3a-3; never implemented.** Code staleness via `brain staleness` (v0.9.0) is the code-side analogue but does not cover Obsidian vault edits.
+- [ ] **REFRAMED → Phase 3d** — File-watcher (Obsidian-side edits → DB update with conflict detection) was originally Phase 3a-3. **Per 2026-05-28 redirect: deprioritize Obsidian-as-UI in favor of building our own brain-insights frontend (Phase 3d). The Obsidian export remains a lossless markdown mirror; live sync of vault edits is no longer load-bearing.** Code staleness via `brain staleness` (v0.9.0) is the code-side analogue.
 - [x] Compliance subsystem (under-captured session detection + warnings) (3a-4 v0.7.0)
 - [x] `brain-session-log`, `brain-session-resume`, `brain-handoff` skills (3a-1 v0.5.0)
 - [x] Sanitization minimum (ANSI stripping + instruction-density flagging + origin-aware retrieval quoting) (3a-2 v0.6.0)
@@ -1215,6 +1215,39 @@ Schema scope: `sources` (with `project_id`, `status`, `provenance_kind`, `genera
 - [ ] Late chunking for agent-memory notes (long-context model embeds whole note, then splits)
 - [ ] HyDE for keyword-poor queries (conditional)
 - [ ] Query decomposition for multi-hop queries
+
+### Phase 3d — Brain Insights Frontend (NEW, 2026-05-28) — ❌ PENDING
+
+**Rationale:** v1 of the spec treated Obsidian as the visualization layer for the brain. In practice the vault is a backup/portability format, not a usable insights surface — agents query via CLI, humans rarely browse markdown for analytics. Phase 3d replaces the never-shipped 3a-3 (Obsidian file watcher) with a purpose-built frontend that surfaces what's actually in the brain.
+
+**Scope (minimum useful slice):**
+
+- [ ] **FastAPI app skeleton** — `src/brain/web/` module, `brain serve` CLI command launches it on `127.0.0.1:8765` by default. No external auth (local-only).
+- [ ] **Dashboard page** — single-glance state of the brain:
+  - sources by kind (totals + last 7d)
+  - compliance: under-captured + thin-session counts (last 30d)
+  - staleness: stale source count + breakdown by status (changed/missing/untracked)
+  - active failures + retry-count distribution
+  - embedding coverage (% of substantive sources with ≥1 embedding)
+  - recent sessions with capture-count overlay
+- [ ] **Source browser** — paginated list with filters (kind, project, has-embedding, has-provenance, invalidated). Click to view content, provenance, neighbors, recall_log hits. Inline invalidate / revise buttons.
+- [ ] **Retrieval analytics view** — top queries (last 30d), per-bucket τ rolling ratios, abstain rate over time, average top-1 score, hits-per-query histogram.
+- [ ] **Knowledge graph view** — force-directed graph of sources connected via `entities` / `edges` + `synthesized_from` chains. Click a node to see its content + neighbors. Initially sparse since the entity extractor is unshipped (Phase 2 helper); Phase 3d ships the rendering and the graph fills in as Phase 4 entity extraction lands.
+- [ ] **Session timeline view** — per-session view: turns, events, captures, staleness flags, resume-bundle preview.
+- [ ] **Search-and-recall console** — natural-language query box that wraps `brain recall` (with full hybrid stack + reranker by default). Shows top-k results inline + per-result provenance + invalidate/revise actions.
+- [ ] **Hooks dashboard** — when each hook fired, payload, failures (`event_kind='hook_error'`).
+
+**Stack decision (open):**
+- Server: FastAPI (already a Python project) + Jinja2 templates.
+- Client: HTMX for interactivity, Alpine.js for tiny client-side state, Tailwind for styling, vis-network or Cytoscape.js for the graph view. NO npm/node toolchain.
+- Charts: Chart.js (CDN, no build step) for histograms/lines.
+
+**Tech-stack alternative considered:** Streamlit/Gradio dashboards (faster to build) — rejected because they constrain layout and don't compose well with multi-page navigation. React/Next.js (richer) — rejected because the node toolchain adds operational complexity disproportionate to value at single-user scale.
+
+**Non-goals:**
+- No multi-user auth (single-user local tool).
+- No mobile-responsive UI (laptop browser is the target).
+- No realtime sockets — periodic polling is fine for dashboards (default 10s refresh).
 
 ### Phase 4 — Power features + multi-platform + maintenance loops — ❌ PENDING
 
@@ -1237,11 +1270,12 @@ Each phase is one implementation plan, written after this spec is approved. Phas
 |---|---|---|---|
 | Phase 1 | 8/8 | 0 | 8 |
 | Phase 2 | 13/13 | 0 | 13 |
-| Phase 3a (1+2+4) | 6/7 | 1 (Obsidian file watcher) | 7 |
+| Phase 3a (1+2+4) | 6/6 | 0 (3a-3 reframed → 3d) | 6 |
 | Phase 3b | 1/5 | 4 (multi-query, self-query, CRAG, --deep wrapper) + eval-50Q | 5 |
 | Phase 3c | 0/4 | 4 | 4 |
+| **Phase 3d — Brain Insights Frontend (NEW)** | **0/8** | **8** | **8** |
 | Phase 4 | 0/9 | 9 | 9 |
-| **Spec total** | **28/46** (61%) | **18** | **46** |
+| **Spec total** | **28/53** (53%) | **25** | **53** |
 | Out-of-spec extensions shipped | 8 | — | — |
 
 ## Test plan

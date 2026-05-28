@@ -319,6 +319,27 @@ Blocklisted tools (`TodoWrite`, `Skill`, `AskUserQuestion`, `ToolSearch`, `TaskS
 git pull && /reload-plugins
 ```
 
+## v0.11.0 — Brain Telescope (insights frontend)
+
+A local web frontend for the agent-brain — a dark Crimson Matrix instrument panel showing dashboard + source browser + source detail. Built with FastAPI + Jinja + HTMX + Alpine; no node toolchain.
+
+```bash
+brain serve              # → http://127.0.0.1:8765
+brain serve --port 9000
+brain serve --reload     # dev: auto-reload templates
+brain serve --host 0.0.0.0  # LAN access — NO AUTH, trusted network only
+```
+
+Pages shipped:
+
+- **`/` Dashboard** — hero metric (total captures), capture cadence sparkline + per-kind breakdown, compliance block (under-captured / thin / strict mode), staleness (changed / missing / untracked), top failures, embedding coverage.
+- **`/sources` Browser** — paginated list of substantive captures with HTMX search-as-you-type, kind-filter pills, and a hidden field that survives filter chaining.
+- **`/sources/<id>` Detail** — full content, provenance metadata, action bar (invalidate / revise / open-in-recall).
+
+Deferred to v0.11.1+: sessions timeline, retrieval analytics, knowledge graph, recall console, health/observability dashboard (Stitch mockups for these already exist at `frontend-design/mockups/{recall,knowledge,health}.html`).
+
+Design spec: `docs/superpowers/specs/2026-05-28-brain-insights-frontend-design.md`. Mockups: `frontend-design/mockups/`. Operations doc: `docs/v0.11.0-frontend.md`.
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-05-17-obsidian-second-brain-skill-pack-design.md`

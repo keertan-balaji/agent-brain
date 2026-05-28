@@ -2,13 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a local FastAPI + Jinja + HTMX web frontend for the brain — a single-glance dark instrument panel showing dashboard + source browser + source detail. Minimum slice; analytics + graph + console deferred to v0.11.1-2.
+**Goal:** Ship a local FastAPI + Jinja + HTMX web frontend for the brain — a single-glance dark instrument panel showing dashboard + source browser + source detail (+ optional recall console). Minimum slice; analytics + graph deferred to v0.11.1-2.
 
-**Architecture:** New `src/brain/web/` Python package. FastAPI app with Jinja2 templates rendering pages that match the "Brain Telescope" design exactly (see `frontend-design/mockups/*.html` for pixel-locked references + `frontend-design/assets/styles.css` for the shared stylesheet). HTMX for partial-page swaps (filter pills, pagination). Alpine.js for tiny client-side state (cmd-K modal). Zero npm / node toolchain — all CSS bundled with the brain package, fonts via Google CDN, JS libs via CDN. New `brain serve` CLI command launches Uvicorn on `127.0.0.1:8765` by default.
+**Architecture:** New `src/brain/web/` Python package. FastAPI app with Jinja2 templates rendering pages that match the **Crimson Matrix** design exactly (see `frontend-design/mockups/*.html` for pixel-locked references — each mockup is a Stitch-generated Tailwind dark theme with inlined config). HTMX for partial-page swaps (filter pills, pagination). Alpine.js for tiny client-side state (cmd-K modal). Zero npm / node toolchain — Tailwind via CDN with theme config inlined in `base.html`, JetBrains Mono + Geist + Material Symbols Outlined via Google Fonts CDN, JS libs via CDN. New `brain serve` CLI command launches Uvicorn on `127.0.0.1:8765` by default.
 
-**Tech Stack:** Python 3.12, FastAPI, Jinja2, Uvicorn, HTMX 2 (CDN), Alpine.js 3 (CDN). **System fonts only — no Google Fonts CDN, no font files bundled.** `system-ui` / `-apple-system` for sans (SF Pro on Apple), `ui-monospace` for mono (SF Mono on Apple). New runtime deps: `fastapi`, `uvicorn[standard]`, `jinja2`. No frontend build step.
+**Tech Stack:** Python 3.12, FastAPI, Jinja2, Uvicorn, HTMX 2 (CDN), Alpine.js 3 (CDN), Tailwind CDN (`https://cdn.tailwindcss.com?plugins=forms,container-queries`), Material Symbols Outlined (Google Fonts CDN), JetBrains Mono + Geist (Google Fonts CDN). New runtime deps: `fastapi`, `uvicorn[standard]`, `jinja2`. No frontend build step.
 
-**Spec reference:** `docs/superpowers/specs/2026-05-28-brain-insights-frontend-design.md` (full design spec + tokens + page layouts). Mockups: `frontend-design/mockups/{dashboard,sources,source-detail}.html`. Aesthetic direction: "Brain Telescope" — dark refined instrument panel.
+> **Policy note:** This plan supersedes the v2 "system fonts only — no CDN" rule. v3.1 (Crimson Matrix) requires Tailwind CDN + Google Fonts CDN — adopt them. Note that headlines are JetBrains Mono (NOT Geist) and body is Geist (NOT Inter) — the Crimson Matrix flips the typography roles from the earlier green theme.
+
+> **SRI note (security):** External `<script>` tags should carry `integrity="sha384-..." crossorigin="anonymous"` to defend against CDN compromise. Apply SRI to HTMX (`htmx.org`) and Alpine.js (`alpinejs`) — both publish hashes. Tailwind Play CDN (`cdn.tailwindcss.com`) is an interpretation layer that re-evaluates utility classes at runtime and is not SRI-pinnable; mitigate by pinning a vendored `tailwind.min.js` from a specific release in `static/` for production (out of scope for v0.11.0 dev preview; track for v0.11.1). Server binds to `127.0.0.1` by default, so the threat surface is the user's own machine — but `brain serve --host 0.0.0.0` exposes the CDN-load path to LAN attackers, so SRI matters once that flag is used.
+
+**Spec reference:** `docs/superpowers/specs/2026-05-28-brain-insights-frontend-design.md` (v3 section at top — Persistent Cognition Protocol tokens, typography, components). Mockups: `frontend-design/mockups/{dashboard,sources,source-detail,recall}.html`. Token + philosophy manifest: `frontend-design/stitch_agent_brain_dashboard/persistent_cognition_protocol/DESIGN.md`. Aesthetic direction: matrix-green primary on tonal-layered dark canvas, Material 3 dark system, 1px outlines, no shadows.
 
 **v0.10.1 prerequisites in place (verified):**
 - `brain.staleness.scan_db` returns `StalenessReport` with `stale_sources` + counts. Used by dashboard "staleness" card.
@@ -43,8 +47,8 @@ src/brain/web/
       _filter_pills.html                 # HTMX swap target
       _source_row.html                   # used by HTMX search-as-you-type
   static/
-    styles.css                           # COPIED VERBATIM from frontend-design/assets/styles.css
-    noise.svg                            # tiny SVG grain (inlined in styles.css too)
+    app.css                              # small overrides only: scrollbar, .material-symbols-outlined variation settings, pulse keyframes
+    # NO bundled styles.css — Tailwind theme config is inlined inside base.html's <head>
   queries.py                             # all SQL queries (dashboard stats, source list, source detail)
   models.py                              # Pydantic response models for typed routes
 tests/
@@ -134,9 +138,10 @@ def test_dashboard_route_returns_200(client: TestClient) -> None:
 
 
 def test_static_files_served(client: TestClient) -> None:
-    res = client.get("/static/styles.css")
+    res = client.get("/static/app.css")
     assert res.status_code == 200
-    assert "--bg-0:" in res.text  # one of the CSS tokens
+    # app.css holds Crimson Matrix overrides (scrollbar, scanline, MS icons).
+    assert "crimson-scanline" in res.text
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**
@@ -302,11 +307,31 @@ Create empty `src/brain/web/templates/dashboard.html` etc. — the minimal templ
 <!DOCTYPE html><html><body><div class="detail-content">{{ source.content }}</div></body></html>
 ```
 
-Create `src/brain/web/static/styles.css` by COPYING the file from `frontend-design/assets/styles.css` verbatim:
+Create `src/brain/web/static/app.css` with the Crimson Matrix overrides (small file — Tailwind handles the rest via CDN):
 
-```bash
-cp frontend-design/assets/styles.css src/brain/web/static/styles.css
+```css
+/* src/brain/web/static/app.css — Crimson Matrix overrides */
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+/* 4px crimson-hover scrollbars */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0e0e0e; }
+::-webkit-scrollbar-thumb { background: #444444; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #da0037; }
+
+/* Optional CRT-scanline overlay for hero blocks */
+.crimson-scanline {
+  background: linear-gradient(to bottom, transparent 50%, rgba(218, 0, 55, 0.05) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+}
 ```
+
+> **No `styles.css` in v3.1.** Tailwind handles all theming via the CDN script + inline config in `base.html`. `app.css` exists only for the handful of styles that can't live in Tailwind utilities (scrollbar, icon variation settings, scanline keyframes).
 
 - [ ] **Step 5: Add `brain serve` to CLI**
 
@@ -826,7 +851,38 @@ The templates must match `frontend-design/mockups/{dashboard,sources,source-deta
 
 - [ ] **Step 1: Create `src/brain/web/templates/base.html`**
 
-Use the same `<head>` font links + `<link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">` pattern from the mockups. Yield blocks for `title`, `topbar_meta`, and `content`. Include `partials/_sidebar.html` and `partials/_topbar.html`.
+Mirror the Stitch mockup `<head>` block exactly. The base must include:
+
+1. `<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>`
+2. The full Tailwind theme config block (`<script id="tailwind-config">tailwind.config = {...}</script>`) extracted verbatim from any Stitch mockup. This is the single source of truth — every page inherits it from `base.html`.
+3. Google Fonts links (Crimson Matrix):
+   ```html
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Geist:wght@400;500;600&display=swap" />
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+   ```
+4. The Material Symbols inline style + custom scrollbar CSS lifted from the Crimson Matrix mockups:
+   ```html
+   <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+   ```
+   where `app.css` contains:
+   ```css
+   .material-symbols-outlined {
+     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+     vertical-align: middle;
+   }
+   ::-webkit-scrollbar { width: 4px; height: 4px; }
+   ::-webkit-scrollbar-track { background: #0e0e0e; }
+   ::-webkit-scrollbar-thumb { background: #444444; border-radius: 2px; }
+   ::-webkit-scrollbar-thumb:hover { background: #da0037; }
+   .crimson-scanline {
+     background: linear-gradient(to bottom, transparent 50%, rgba(218, 0, 55, 0.05) 50%);
+     background-size: 100% 4px;
+     pointer-events: none;
+   }
+   ```
+5. `<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-white overflow-hidden">`.
+
+Yield blocks for `title`, `topbar_meta`, and `content`. Include `partials/_sidebar.html` and `partials/_topbar.html`.
 
 - [ ] **Step 2: Convert each mockup into a Jinja template**
 
@@ -884,7 +940,7 @@ def test_dashboard_renders_hero_value(client: TestClient, pg_url: str) -> None:
     assert res.status_code == 200
     assert "hero-value" in res.text
     # The hero must contain a number ≥ 1 since we just inserted a decision.
-    # No Google Fonts CDN in v2 — verify hero-value rendered with system-ui.
+    # v3: hero-value class lives inside a Tailwind-themed page; assert the class survives template render.
     assert "hero-value" in res.text
 
 

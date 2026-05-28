@@ -5,8 +5,8 @@
     "email": "keertan@syntheticsciences.ai"
   },
   "metadata": {
-    "description": "Persistent cognition store for AI coding agents — Postgres + pgvector + hybrid retrieval + agent-driven reasoning helpers.",
-    "version": "0.10.1"
+    "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend.",
+    "version": "0.11.0"
   },
   "plugins": [
     {
@@ -15,8 +15,8 @@
         "source": "url",
         "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "v0.10.1: PreToolUse hook auto-injects brain recall before Bash/Edit/Write — agents see prior captures BEFORE acting. Plus v0.10.0 revise --from-diff + v0.9.0 staleness + v0.8.5 noise filters + v0.8.4 auto-embed + v0.8.3 hybrid recall CLI default. hit@5 = 25% → 100% on 16-Q eval. 19 brain-* + 5 obsidian-* skills.",
-      "version": "0.10.1",
+      "description": "v0.11.0: Brain Telescope — dark Crimson Matrix web frontend (FastAPI + HTMX) via `brain serve`. Plus v0.10.1 PreToolUse auto-recall + v0.10.0 revise --from-diff + v0.9.0 staleness + v0.8.5 noise filters + v0.8.4 auto-embed + v0.8.3 hybrid recall. hit@5 = 25% → 100% on 16-Q eval. 19 brain-* + 5 obsidian-* skills.",
+      "version": "0.11.0",
       "strict": true
     }
   ]

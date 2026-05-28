@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Agent Brain - Knowledge Base Visualizer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "surface": "#131313",
+                        "primary": "#ffb3b3",
+                        "on-tertiary-container": "#f0f0f0",
+                        "primary-container": "#da0037",
+                        "secondary-container": "#474747",
+                        "inverse-on-surface": "#313030",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "inverse-surface": "#e5e2e1",
+                        "surface-bright": "#393939",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "surface-container-highest": "#353534",
+                        "secondary-fixed-dim": "#c8c6c6",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-error-container": "#ffdad6",
+                        "surface-dim": "#131313",
+                        "surface-container-low": "#1c1b1b",
+                        "inverse-primary": "#bf002f",
+                        "on-secondary-container": "#b6b5b4",
+                        "surface-container-lowest": "#0e0e0e",
+                        "outline-variant": "#5d3f3f",
+                        "secondary-fixed": "#e4e2e2",
+                        "primary-fixed": "#ffdad9",
+                        "surface-container-high": "#2a2a2a",
+                        "error": "#ffb4ab",
+                        "surface-variant": "#353534",
+                        "surface-container": "#201f1f",
+                        "on-primary-fixed-variant": "#920022",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "on-primary": "#680015",
+                        "surface-tint": "#ffb3b3",
+                        "on-primary-fixed": "#400009",
+                        "secondary": "#c8c6c6",
+                        "tertiary-container": "#6c6d6d",
+                        "primary-fixed-dim": "#ffb3b3",
+                        "on-background": "#e5e2e1",
+                        "on-surface-variant": "#e6bcbc",
+                        "on-secondary": "#303030",
+                        "tertiary": "#c6c6c7",
+                        "on-surface": "#e5e2e1",
+                        "on-secondary-fixed-variant": "#474747",
+                        "outline": "#ad8887",
+                        "on-tertiary": "#2f3131",
+                        "on-primary-container": "#ffebea",
+                        "background": "#131313",
+                        "tertiary-fixed": "#e2e2e2"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter": "12px",
+                        "margin": "16px",
+                        "container-max": "1440px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["JetBrains Mono"],
+                        "label-sm": ["JetBrains Mono"],
+                        "headline-md": ["JetBrains Mono"],
+                        "body-sm": ["Geist"],
+                        "body-md": ["Geist"],
+                        "body-lg": ["Geist"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["JetBrains Mono"],
+                        "headline-lg": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "label-sm": ["10px", { "lineHeight": "12px", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #171717; /* Base level as per style guide, though config has background: #131313 */
+        }
+        /* Overriding tailwind config background to match strict instructions */
+        .bg-custom-base { background-color: #171717; }
+        .border-custom-module { border-color: #444444; border-width: 1px; }
+        .border-custom-active { border-color: #DA0037; border-width: 1px; }
+        
+        /* Node styles for JS generated graph */
+        .node { fill: #353534; stroke: #444444; stroke-width: 1px; transition: fill 0.2s, stroke 0.2s; }
+        .node:hover { stroke: #DA0037; cursor: pointer; }
+        .node.active { fill: #DA0037; stroke: #DA0037; }
+        .link { stroke: #444444; stroke-width: 1px; }
+        .link.high-confidence { stroke: #DA0037; stroke-width: 2px; stroke-dasharray: 4; animation: dash 20s linear infinite; }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: 1000; }
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #171717;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #444444;
+            border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #DA0037;
+        }
+    </style>
+</head>
+<body class="bg-custom-base text-on-surface min-h-screen flex font-body-md overflow-hidden">
+<!-- SideNavBar (Desktop only based on rules, hidden md:flex layout dictates otherwise in rule, but JSON says fixed left-0) -->
+<nav class="hidden md:flex flex-col fixed left-0 top-0 h-full w-64 bg-surface-container-low dark:bg-surface-container-low border-r border-surface-container-highest z-50">
+<!-- Header -->
+<div class="p-6 border-b border-surface-container-highest">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-10 h-10 rounded bg-surface-container-highest border border-custom-module flex items-center justify-center overflow-hidden">
+<img alt="Agent Brain System Avatar" class="w-full h-full object-cover" data-alt="A highly stylized, abstract digital avatar representing an AI system core. The image should feature sharp geometric shapes intersecting with glowing crimson lines against a deep, dark obsidian background. The lighting is dramatic and directional, creating a sense of a powerful, central processing unit in a high-tech, utilitarian environment. The aesthetic is strictly dark mode, aggressive, and engineered." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9vEIL5NtTa9yQMlmer1sVVcKHvKdPuxCnmhOG7JMjb6e80eg8-uLiQRI9seIJ2ewveF6bEZAHI2Et9qMmpmavwC8q0ZHz5BPGtLhBJWPwJiRw-VVKQzHTRGGks7vSMgCF_i6_CbqZInEoR3_F32ovOnO82piyLZGzGLQx73_0jh0-hneYX8hLCgdtBwoTMQXEPu-G9wKmmoEP397CahB54wJb7HiSic8tX0KDzbIwvf3ztk9_zQVPsm7GuURFVPN-TAsTzy1tsKw"/>
+</div>
+<div>
+<h1 class="font-headline-sm text-headline-sm text-primary dark:text-primary font-bold">AGENT_BRAIN_V1</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">OPERATOR_01</p>
+</div>
+</div>
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-2 px-4 rounded hover:bg-inverse-primary transition-colors flex items-center justify-center gap-2 border border-primary-container">
+<span class="material-symbols-outlined" data-icon="add" style="font-size: 16px;">add</span>
+                NEW_SESSION
+            </button>
+</div>
+<!-- Main Navigation -->
+<div class="flex-1 py-4 overflow-y-auto custom-scrollbar">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                        Dashboard
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-primary bg-primary-container dark:bg-primary-container dark:text-on-primary-container border-l-2 border-primary px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all scale-[0.99] duration-75" href="#">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+                        Sources
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+                        Recall
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+                        Projects
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="heart_pulse">pulse_alert</span>
+                        Health
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+</div>
+<!-- Footer Navigation -->
+<div class="border-t border-surface-container-highest p-4">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-2 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="code" style="font-size: 18px;">code</span>
+                        System Log
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-2 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="description" style="font-size: 18px;">description</span>
+                        API Docs
+                    </a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-0 md:ml-64 flex flex-col h-screen relative">
+<!-- TopNavBar (Mobile visible, functional on desktop as secondary header) -->
+<header class="flex justify-between items-center w-full px-gutter h-14 bg-surface dark:bg-surface border-b border-surface-container-highest flex-shrink-0 z-40">
+<div class="flex items-center gap-4">
+<span class="md:hidden font-headline-md text-headline-md font-bold text-on-surface dark:text-on-surface uppercase tracking-tight">Agent Brain</span>
+<nav class="hidden md:flex gap-6 h-full items-center">
+<a class="font-headline-sm text-headline-sm font-label-md text-label-md text-primary dark:text-primary border-b-2 border-primary pb-1 opacity-80 duration-100" href="#">Global</a>
+<a class="font-headline-sm text-headline-sm font-label-md text-label-md text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors px-2 py-1 rounded" href="#">Recency</a>
+<a class="font-headline-sm text-headline-sm font-label-md text-label-md text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors px-2 py-1 rounded" href="#">Projects</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search" style="font-size: 18px;">search</span>
+<input class="bg-custom-base border border-custom-module rounded pl-8 pr-3 py-1 text-on-surface font-label-sm text-label-sm focus:border-custom-active focus:outline-none focus:ring-0 w-64 transition-colors placeholder:text-secondary-container" placeholder="QUERY_KNOWLEDGE_GRAPH..." type="text"/>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<button class="p-1 hover:bg-surface-container-high rounded transition-colors" title="Terminal">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="p-1 hover:bg-surface-container-high rounded transition-colors" title="Speed">
+<span class="material-symbols-outlined" data-icon="speed">speed</span>
+</button>
+<button class="p-1 hover:bg-surface-container-high rounded transition-colors" title="Help">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Visualization Area -->
+<div class="flex-1 flex overflow-hidden relative">
+<!-- Graph Container (SVG Canvas) -->
+<div class="flex-1 bg-custom-base relative cursor-crosshair" id="graph-container">
+<!-- Overlay Tools -->
+<div class="absolute top-4 left-4 flex gap-2 z-10">
+<button class="bg-surface-container-low border border-custom-module p-1.5 rounded hover:border-custom-active text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="zoom_in" style="font-size: 20px;">zoom_in</span>
+</button>
+<button class="bg-surface-container-low border border-custom-module p-1.5 rounded hover:border-custom-active text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="zoom_out" style="font-size: 20px;">zoom_out</span>
+</button>
+<button class="bg-surface-container-low border border-custom-module p-1.5 rounded hover:border-custom-active text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="my_location" style="font-size: 20px;">my_location</span>
+</button>
+</div>
+<div class="absolute bottom-4 left-4 flex flex-col gap-1 z-10 font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low border border-custom-module p-2 rounded">
+<div class="flex items-center gap-2"><div class="w-3 h-0.5 bg-[#444444]"></div><span>STANDARD_LINK</span></div>
+<div class="flex items-center gap-2"><div class="w-3 h-0.5 bg-primary-container border-b-2 border-primary-container border-dashed"></div><span class="text-primary">HIGH_CONFIDENCE</span></div>
+</div>
+<!-- SVG Graph will be drawn here by JS -->
+<svg class="w-full h-full" id="knowledge-graph"></svg>
+</div>
+<!-- Detail Side Panel (Right) -->
+<aside class="w-80 bg-surface-container-low border-l border-custom-module flex flex-col h-full transform transition-transform duration-300 translate-x-0" id="detail-panel">
+<div class="p-4 border-b border-custom-module flex justify-between items-center">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">NODE_INSPECTOR</h2>
+<button class="text-on-surface-variant hover:text-primary transition-colors" id="close-panel">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+<!-- Identity Block -->
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-secondary-container">ENTITY_ID</span>
+<span class="bg-primary-container text-on-primary-container font-label-sm text-label-sm px-2 py-0.5 rounded">ACTIVE</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-1">Project_Crimson_Matrix</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Core architectural documentation mapping neural pathways to visual outputs.</p>
+</div>
+<!-- Metadata Grid -->
+<div class="grid grid-cols-2 gap-4">
+<div class="border border-custom-module p-2 rounded bg-custom-base">
+<span class="block font-label-sm text-label-sm text-secondary-container mb-1">TYPE</span>
+<span class="font-label-md text-label-md text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary" data-icon="schema" style="font-size: 14px;">schema</span>
+                                Architecture
+                            </span>
+</div>
+<div class="border border-custom-module p-2 rounded bg-custom-base">
+<span class="block font-label-sm text-label-sm text-secondary-container mb-1">CONFIDENCE</span>
+<span class="font-label-md text-label-md text-primary">98.4%</span>
+</div>
+<div class="border border-custom-module p-2 rounded bg-custom-base col-span-2">
+<span class="block font-label-sm text-label-sm text-secondary-container mb-1">LAST_SYNC</span>
+<span class="font-label-md text-label-md text-on-surface">2023-10-27T08:42:11Z</span>
+</div>
+</div>
+<!-- Connected Edges List -->
+<div>
+<h4 class="font-label-sm text-label-sm text-secondary-container mb-3 border-b border-custom-module pb-1">CONNECTED_CLAIMS (3)</h4>
+<ul class="space-y-2">
+<li class="border border-custom-module rounded p-2 hover:border-custom-active transition-colors cursor-pointer bg-custom-base">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-md text-label-md text-on-surface">DataStore_Ref_V2</span>
+<span class="material-symbols-outlined text-primary" data-icon="link" style="font-size: 14px;">link</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[95%]"></div>
+</div>
+</li>
+<li class="border border-custom-module rounded p-2 hover:border-custom-active transition-colors cursor-pointer bg-custom-base">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-md text-label-md text-on-surface">UI_Token_Manifest</span>
+<span class="material-symbols-outlined text-primary" data-icon="link" style="font-size: 14px;">link</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded overflow-hidden">
+<div class="bg-primary-container h-full w-[82%]"></div>
+</div>
+</li>
+<li class="border border-custom-module rounded p-2 hover:border-custom-active transition-colors cursor-pointer bg-custom-base opacity-70">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-md text-label-md text-on-surface-variant">Legacy_Style_Guide</span>
+<span class="material-symbols-outlined text-secondary-container" data-icon="link_off" style="font-size: 14px;">link_off</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded overflow-hidden">
+<div class="bg-secondary-container h-full w-[45%]"></div>
+</div>
+</li>
+</ul>
+</div>
+<!-- Action -->
+<div class="pt-4 border-t border-custom-module">
+<button class="w-full border border-custom-module text-on-surface font-label-md text-label-md py-2 px-4 rounded hover:bg-surface-container-highest transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="open_in_new" style="font-size: 16px;">open_in_new</span>
+                            OPEN_SOURCE_DOCUMENT
+                        </button>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<script>
+        // Simple procedural generation of a graph to demonstrate the visualizer
+        document.addEventListener('DOMContentLoaded', () => {
+            const svg = document.getElementById('knowledge-graph');
+            const width = svg.clientWidth;
+            const height = svg.clientHeight;
+            
+            // Dummy data
+            const numNodes = 25;
+            const nodes = [];
+            for (let i = 0; i < numNodes; i++) {
+                nodes.push({
+                    id: i,
+                    x: Math.random() * (width - 100) + 50,
+                    y: Math.random() * (height - 100) + 50,
+                    r: Math.random() * 10 + 5,
+                    isActive: i === 0, // Node 0 is our active one
+                    label: i === 0 ? 'Project_Crimson' : `Entity_0${i}`
+                });
+            }
+
+            const links = [];
+            for (let i = 0; i < numNodes * 1.5; i++) {
+                const source = Math.floor(Math.random() * numNodes);
+                let target = Math.floor(Math.random() * numNodes);
+                while (target === source) target = Math.floor(Math.random() * numNodes);
+                links.push({
+                    source: source,
+                    target: target,
+                    isHighConfidence: Math.random() > 0.8 || source === 0
+                });
+            }
+
+            // Draw Links
+            links.forEach(link => {
+                const s = nodes[link.source];
+                const t = nodes[link.target];
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', s.x);
+                line.setAttribute('y1', s.y);
+                line.setAttribute('x2', t.x);
+                line.setAttribute('y2', t.y);
+                line.classList.add('link');
+                if (link.isHighConfidence) line.classList.add('high-confidence');
+                svg.appendChild(line);
+            });
+
+            // Draw Nodes
+            nodes.forEach(node => {
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', node.x);
+                circle.setAttribute('cy', node.y);
+                circle.setAttribute('r', node.isActive ? node.r * 1.5 : node.r);
+                circle.classList.add('node');
+                if (node.isActive) circle.classList.add('active');
+                
+                // Interaction
+                circle.addEventListener('click', () => {
+                    document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+                    circle.classList.add('active');
+                    // Panel logic
+                    const panel = document.getElementById('detail-panel');
+                    panel.classList.remove('translate-x-full');
+                });
+
+                group.appendChild(circle);
+
+                // Add labels for prominent nodes
+                if(node.r > 12 || node.isActive) {
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', node.x + node.r + 5);
+                    text.setAttribute('y', node.y + 4);
+                    text.textContent = node.label;
+                    text.setAttribute('fill', node.isActive ? '#DA0037' : '#e5e2e1');
+                    text.setAttribute('font-family', 'JetBrains Mono');
+                    text.setAttribute('font-size', '10px');
+                    group.appendChild(text);
+                }
+
+                svg.appendChild(group);
+            });
+
+            // Panel close logic
+            document.getElementById('close-panel').addEventListener('click', () => {
+                document.getElementById('detail-panel').classList.add('translate-x-full');
+                document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+            });
+            
+            // Handle window resize roughly
+            window.addEventListener('resize', () => {
+                 // In a real app, you'd recalculate physics layout here
+            });
+        });
+    </script>
+</body></html>

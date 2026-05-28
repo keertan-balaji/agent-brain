@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Recall Interface - Agent Brain</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-fixed": "#1a1c1c",
+                      "surface": "#131313",
+                      "primary": "#ffb3b3",
+                      "on-tertiary-container": "#f0f0f0",
+                      "primary-container": "#da0037",
+                      "secondary-container": "#474747",
+                      "inverse-on-surface": "#313030",
+                      "on-error": "#690005",
+                      "error-container": "#93000a",
+                      "inverse-surface": "#e5e2e1",
+                      "surface-bright": "#393939",
+                      "on-tertiary-fixed-variant": "#454747",
+                      "surface-container-highest": "#353534",
+                      "secondary-fixed-dim": "#c8c6c6",
+                      "tertiary-fixed-dim": "#c6c6c7",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#131313",
+                      "surface-container-low": "#1c1b1b",
+                      "inverse-primary": "#bf002f",
+                      "on-secondary-container": "#b6b5b4",
+                      "surface-container-lowest": "#0e0e0e",
+                      "outline-variant": "#5d3f3f",
+                      "secondary-fixed": "#e4e2e2",
+                      "primary-fixed": "#ffdad9",
+                      "surface-container-high": "#2a2a2a",
+                      "error": "#ffb4ab",
+                      "surface-variant": "#353534",
+                      "surface-container": "#201f1f",
+                      "on-primary-fixed-variant": "#920022",
+                      "on-secondary-fixed": "#1b1c1c",
+                      "on-primary": "#680015",
+                      "surface-tint": "#ffb3b3",
+                      "on-primary-fixed": "#400009",
+                      "secondary": "#c8c6c6",
+                      "tertiary-container": "#6c6d6d",
+                      "primary-fixed-dim": "#ffb3b3",
+                      "on-background": "#e5e2e1",
+                      "on-surface-variant": "#e6bcbc",
+                      "on-secondary": "#303030",
+                      "tertiary": "#c6c6c7",
+                      "on-surface": "#e5e2e1",
+                      "on-secondary-fixed-variant": "#474747",
+                      "outline": "#ad8887",
+                      "on-tertiary": "#2f3131",
+                      "on-primary-container": "#ffebea",
+                      "background": "#131313",
+                      "tertiary-fixed": "#e2e2e2"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "gutter": "12px",
+                      "margin": "16px",
+                      "container-max": "1440px"
+              },
+              "fontFamily": {
+                      "headline-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "label-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-md": [
+                              "JetBrains Mono"
+                      ],
+                      "body-sm": [
+                              "Geist"
+                      ],
+                      "body-md": [
+                              "Geist"
+                      ],
+                      "body-lg": [
+                              "Geist"
+                      ],
+                      "label-md": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg-mobile": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg": [
+                              "JetBrains Mono"
+                      ]
+              },
+              "fontSize": {
+                      "headline-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "10px",
+                              {
+                                      "lineHeight": "12px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "30px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+        }
+        .border-base {
+            border: 1px solid #444444;
+        }
+        .border-active {
+            border: 1px solid #da0037;
+        }
+        /* Hide scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #131313;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #444444;
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #da0037;
+        }
+    </style>
+</head>
+<body class="flex bg-surface text-on-surface h-screen overflow-hidden antialiased font-body-md selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-low dark:bg-surface-container-low flex flex-col fixed left-0 top-0 h-full w-64 border-r border-surface-container-highest z-50 hidden md:flex">
+<!-- Header -->
+<div class="p-gutter border-b border-surface-container-highest flex items-center gap-3">
+<div class="w-10 h-10 rounded border-base bg-surface-container flex items-center justify-center shrink-0">
+<img alt="Agent Brain System Avatar" class="w-full h-full object-cover rounded" data-alt="A highly abstract digital representation of a central processing unit, styled as a glowing crimson core against a deep black void. The core is surrounded by intricate geometric circuits and sharp, technical lines, evoking a sense of aggressive computational power and speed. High contrast, technical minimalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuABHvwJWkIr7WZ_faIryz2SW08MmoDUbU6u2nn0-th3_SY4V1oRg7DUCQFiO7Bnz-UkbkZQejaKbuFRykEeSNX2XzzKbt9Oh-Jb1VOVJQDhOhWKKFebEPJuGg8OOQN4SUksYmxMNb2cPJ7tpYOq6ReD8ITZ6t4X-JDRlh1fCxPXbD1Njkv9rnffpJK7ZZzo74EFn0vAUBpxz0EL6Jm_yeqkwC7pbJVz0gKfP2twujv2HRIZmJDyNYEZ15xZ9gudpSV9u289nnOv-hM"/>
+</div>
+<div class="overflow-hidden">
+<h1 class="font-headline-sm text-headline-sm text-primary dark:text-primary font-bold truncate">AGENT_BRAIN_V1</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">OPERATOR_01</p>
+</div>
+</div>
+<!-- Main Tabs -->
+<div class="flex-1 overflow-y-auto py-gutter space-y-1">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all group" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md group-hover:text-primary transition-colors" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all group" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md group-hover:text-primary transition-colors" data-icon="database">database</span>
+<span class="font-label-md text-label-md">Sources</span>
+</a>
+<!-- Active Tab -->
+<a class="flex items-center gap-3 text-on-primary bg-primary-container dark:bg-primary-container dark:text-on-primary-container border-l-2 border-primary px-4 py-3 scale-[0.99] duration-75" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md" data-icon="history" data-weight="fill" style="font-variation-settings: 'FILL' 1;">history</span>
+<span class="font-label-md text-label-md">Recall</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all group" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md group-hover:text-primary transition-colors" data-icon="folder_open">folder_open</span>
+<span class="font-label-md text-label-md">Projects</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all group" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md group-hover:text-primary transition-colors" data-icon="heart_pulse">pulse_alert</span>
+<span class="font-label-md text-label-md">Health</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-secondary-fixed-dim hover:text-on-surface px-4 py-3 hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-all group" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md group-hover:text-primary transition-colors" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</div>
+<!-- CTA & Footer -->
+<div class="p-gutter border-t border-surface-container-highest space-y-4">
+<button class="w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-2 rounded-DEFAULT hover:opacity-90 transition-opacity border border-transparent hover:border-primary flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                NEW_SESSION
+            </button>
+<div class="space-y-1">
+<a class="flex items-center gap-2 text-on-surface-variant hover:text-on-surface px-2 py-1.5 transition-colors group" href="#">
+<span class="material-symbols-outlined text-[16px] group-hover:text-primary" data-icon="code">code</span>
+<span class="font-label-sm text-label-sm">System Log</span>
+</a>
+<a class="flex items-center gap-2 text-on-surface-variant hover:text-on-surface px-2 py-1.5 transition-colors group" href="#">
+<span class="material-symbols-outlined text-[16px] group-hover:text-primary" data-icon="description">description</span>
+<span class="font-label-sm text-label-sm">API Docs</span>
+</a>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col md:ml-64 h-full bg-surface">
+<!-- TopNavBar (Mobile context usually, but keeping as header per JSON if needed, adapted for layout) -->
+<header class="bg-surface dark:bg-surface flex justify-between items-center w-full px-gutter h-14 border-b border-surface-container-highest md:hidden shrink-0">
+<div class="font-headline-md text-headline-md font-bold text-on-surface dark:text-on-surface uppercase tracking-tight">Agent Brain</div>
+<div class="flex items-center gap-4">
+<!-- Navigation Links (Hidden on mobile top nav per guidelines, represented as buttons) -->
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="speed">speed</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+</div>
+</header>
+<!-- Search & Recall Canvas -->
+<div class="flex-1 overflow-y-auto p-margin md:p-6 lg:p-8 space-y-6">
+<!-- Context Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-surface-container-highest pb-4">
+<div>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Memory Retrieval</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Querying vector embeddings and full-text indices across all active projects.</p>
+</div>
+<div class="flex gap-2">
+<span class="inline-flex items-center px-2 py-1 rounded-DEFAULT border-base font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-2"></span>
+                        Index: Synchronized
+                    </span>
+<span class="inline-flex items-center px-2 py-1 rounded-DEFAULT border-base font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low">
+                        Nodes: 42,015
+                    </span>
+</div>
+</div>
+<!-- Search Console Input -->
+<div class="relative w-full group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-on-surface-variant group-focus-within:text-primary-container transition-colors">search</span>
+</div>
+<input class="block w-full pl-12 pr-24 py-4 bg-surface-container-low border border-[#444444] rounded-DEFAULT font-headline-sm text-headline-sm text-on-surface placeholder-on-surface-variant focus:border-primary-container focus:ring-0 focus:outline-none transition-colors" placeholder="Enter query parameters or natural language..." type="text" value="authentication failure during concurrent socket connection"/>
+<div class="absolute inset-y-0 right-0 pr-2 flex items-center">
+<button class="bg-surface border-base text-on-surface px-3 py-1.5 rounded-DEFAULT font-label-sm text-label-sm hover:bg-surface-container-highest transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">tune</span>
+                        Params
+                    </button>
+</div>
+</div>
+<!-- Metrics & Filter Bar -->
+<div class="flex flex-wrap items-center justify-between gap-4 py-2">
+<div class="flex items-center gap-3">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Active Filters:</span>
+<div class="flex gap-2">
+<span class="px-2 py-1 border-base rounded-DEFAULT font-label-sm text-label-sm bg-surface text-primary flex items-center gap-1 cursor-pointer hover:border-primary transition-colors">
+                            Source: /src/api
+                            <span class="material-symbols-outlined text-[12px]">close</span>
+</span>
+<span class="px-2 py-1 border-base rounded-DEFAULT font-label-sm text-label-sm bg-surface text-primary flex items-center gap-1 cursor-pointer hover:border-primary transition-colors">
+                            Type: Error Logs
+                            <span class="material-symbols-outlined text-[12px]">close</span>
+</span>
+</div>
+</div>
+<div class="flex items-center gap-4 border-l border-surface-container-highest pl-4">
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Latency</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">124<span class="text-xs text-on-surface-variant ml-0.5">ms</span></span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Matches</span>
+<span class="font-headline-sm text-headline-sm text-primary-container">14</span>
+</div>
+</div>
+</div>
+<!-- Results List -->
+<div class="space-y-4">
+<!-- Result Item 1 (High Match) -->
+<div class="border-base bg-surface-container-lowest rounded-DEFAULT overflow-hidden group hover:border-primary-container transition-colors relative">
+<!-- Score Indicator -->
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container"></div>
+<div class="p-4 pl-6">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-container text-sm">description</span>
+<h3 class="font-label-md text-label-md text-on-surface truncate max-w-md">/src/api/websocket_handler.js</h3>
+<span class="px-1.5 py-0.5 border border-primary-container/30 bg-primary-container/10 text-primary font-label-sm text-[10px] rounded uppercase">Line 142</span>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-[10px] text-on-surface-variant">RRF Score</span>
+<span class="font-headline-sm text-sm text-primary">0.942</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-[10px] text-on-surface-variant">FTS Score</span>
+<span class="font-headline-sm text-sm text-on-surface">0.881</span>
+</div>
+</div>
+</div>
+<div class="bg-[#0e0e0e] border border-[#2a2a2a] p-3 rounded-DEFAULT font-headline-sm text-sm text-secondary-fixed-dim leading-relaxed overflow-x-auto">
+<pre><code>    try {
+        const session = await db.verifyToken(token);
+        if (!session) {
+            <span class="text-primary-container bg-primary-container/10 px-1 rounded">throw new AuthError("Authentication failure during concurrent socket connection");</span>
+        }
+        activeConnections.set(socket.id, session);
+    } catch (err) {</code></pre>
+</div>
+<div class="flex justify-between items-center mt-3 pt-3 border-t border-[#2a2a2a]">
+<span class="font-label-sm text-[10px] text-on-surface-variant">Last Indexed: 12 mins ago</span>
+<div class="flex gap-2">
+<button class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">content_copy</span> Copy
+                                </button>
+<button class="font-label-sm text-label-sm text-primary hover:text-primary-container transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">open_in_new</span> Open File
+                                </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Result Item 2 -->
+<div class="border-base bg-surface-container-lowest rounded-DEFAULT overflow-hidden group hover:border-[#888888] transition-colors relative opacity-80 hover:opacity-100">
+<div class="absolute top-0 left-0 w-1 h-full bg-[#444444]"></div>
+<div class="p-4 pl-6">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">terminal</span>
+<h3 class="font-label-md text-label-md text-on-surface truncate max-w-md">production.log</h3>
+<span class="px-1.5 py-0.5 border border-[#444444] bg-[#1a1c1c] text-secondary-fixed-dim font-label-sm text-[10px] rounded uppercase">2023-10-24 14:32:01</span>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-[10px] text-on-surface-variant">RRF Score</span>
+<span class="font-headline-sm text-sm text-on-surface">0.815</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-sm text-[10px] text-on-surface-variant">FTS Score</span>
+<span class="font-headline-sm text-sm text-on-surface">0.902</span>
+</div>
+</div>
+</div>
+<div class="bg-[#0e0e0e] border border-[#2a2a2a] p-3 rounded-DEFAULT font-headline-sm text-sm text-secondary-fixed-dim leading-relaxed overflow-x-auto">
+<pre><code>[ERROR] [pid:4921] Worker thread failed to establish connection. 
+Reason: <span class="text-primary-container bg-primary-container/10 px-1 rounded">authentication failure</span> detected. Retrying in 5000ms...
+[WARN]  [pid:4921] High volume of <span class="text-primary-container bg-primary-container/10 px-1 rounded">concurrent socket connection</span> requests dropping.</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="text-center pt-4">
+<button class="bg-transparent border border-[#444444] text-on-surface font-label-md text-label-md px-4 py-2 rounded-DEFAULT hover:bg-[#444444] transition-colors">
+                    LOAD MORE RESULTS
+                </button>
+</div>
+</div>
+</main>
+<script>
+        // Simple script to handle input focus state styling if needed beyond CSS
+        document.querySelector('input').addEventListener('focus', function() {
+            this.parentElement.classList.add('ring-1', 'ring-primary-container');
+        });
+        document.querySelector('input').addEventListener('blur', function() {
+            this.parentElement.classList.remove('ring-1', 'ring-primary-container');
+        });
+    </script>
+</body></html>

@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Persistent cognition store for AI coding agents — v0.10.1 adds a PreToolUse hook that auto-injects brain recall hits as additionalContext before Bash/Edit/Write/MultiEdit fires. Removes the last bit of capture-recall discipline: agents see prior captures BEFORE acting, without manually invoking brain-recall.",
-  "version": "0.10.1",
+  "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.0 ships the Brain Telescope: a dark Crimson Matrix instrument panel (FastAPI + HTMX) accessible at http://127.0.0.1:8765 via `brain serve`.",
+  "version": "0.11.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

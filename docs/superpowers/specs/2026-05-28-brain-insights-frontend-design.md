@@ -1,6 +1,6 @@
 # Brain Insights Frontend — Design Spec
 
-**Status:** design-locked, awaiting implementation
+**Status:** design-locked on v3.1 (Crimson Matrix), awaiting implementation
 **Created:** 2026-05-28
 **Target version:** v0.11.0 (minimum slice) → v0.11.1-2 (analytics + graph)
 
@@ -8,7 +8,198 @@
 
 A local web frontend for the agent-brain — a single-glance instrument panel that surfaces the brain's state to the human user. The agent uses the CLI / hooks; the human uses this UI to inspect what the agent has captured and how it's performing.
 
-## Aesthetic direction: "Brain Telescope" (v2 — minimal redesign)
+## v3.1 Aesthetic direction: "Crimson Matrix" (Stitch-adopted, CANONICAL)
+
+The current locked design. Generated via Google's Stitch (Crimson Matrix theme) and accepted as the canonical visual identity for v0.11.0. Replaces v1 (Fraunces+Manrope editorial), v2 (system-ui minimal), AND v3-green (Persistent Cognition Protocol). High-contrast dark mode + technical minimalism: deep-black canvas, vibrant crimson primary reserved for primary actions / critical alerts / active status, strict 2px corner radius, JetBrains Mono headlines, Geist body. "Controlled urgency" — the void provides the empty canvas; crimson signals the alarms.
+
+**Canonical source files:**
+- `frontend-design/stitch_agent_brain_dashboard/crimson_matrix/DESIGN.md` — token + philosophy manifest
+- `frontend-design/mockups/dashboard.html` (from `dashboard_crimson_matrix/code.html`)
+- `frontend-design/mockups/sources.html` (from `sources_browser_crimson_matrix/code.html`)
+- `frontend-design/mockups/recall.html` (from `recall_interface_crimson_matrix/code.html`)
+- `frontend-design/mockups/knowledge.html` (from `knowledge_visualizer_crimson_matrix/code.html`) — v0.11.2 graph
+- `frontend-design/mockups/health.html` (from `health_observability_crimson_matrix/code.html`) — v0.11.1 health
+
+> **Gap:** Stitch did not generate a `source_detail_crimson_matrix/` variant. Implementation must compose the source-detail page from the Crimson primitives demonstrated by the other 5 pages (sidebar, topbar, cards, tables, chips, scrollbar). Treat the layout from the green `_v3-green-legacy/source-detail.html` as the layout skeleton; replace all tokens with Crimson Matrix values.
+
+**Visual commitments (non-negotiable):**
+
+1. **Material 3 dark token system — Crimson Matrix palette.** Use the Stitch palette below verbatim. No ad-hoc colors.
+2. **Tonal layering, NOT shadows.** Depth comes from `surface-container-lowest` (#0e0e0e) → `…-low` (#1c1b1b) → `…` (#201f1f) → `…-high` (#2a2a2a) → `…-highest` (#353534) stacking. `box-shadow` is prohibited.
+3. **1px outlines at `outline-variant` (#5d3f3f).** Hairlines carry a warm reddish-brown tint, not green. 1px exactly. Use `surface-container-highest` (#353534) as the neutral structural border.
+4. **Crimson primary** — `primary-container` (#da0037), `primary` (#ffb3b3 — light crimson for text/icons), `primary-fixed-dim` (#ffb3b3), `surface-tint` (#ffb3b3). Reserve `#da0037` for primary actions, critical alerts, and active status only — it must keep its "alarm value." NEVER substitute green / blue / purple.
+5. **JetBrains Mono (headlines + labels) + Geist (body) + Material Symbols Outlined (icons).** All via Google Fonts CDN. Headlines are mono (developer-tool aesthetic). Body is sans (legibility under density).
+6. **Strict 2px corner radius (0.125rem).** "Micro-softened industrial." More modern than 0px, far more technical than the rounded mainstream. Pills/chips/avatars may use `rounded-full`; everything else stays at 2px.
+7. **Ghost-style secondary buttons.** Transparent + 1px `outline-variant` border + `on-surface` text. Fills with `surface-container-highest` on hover. Primary buttons stay solid crimson (`bg-primary-container text-white`).
+8. **Inputs focus to crimson border** (`focus:border-primary-container`). Background stays `surface` with 1px `outline-variant`.
+9. **Monospace numerals everywhere.** IDs, counts, timestamps, scores all in JetBrains Mono. Since headlines are mono too, tabular alignment is automatic; still apply `font-feature-settings: 'tnum'` defensively.
+10. **Custom 4px scrollbars** per page (inline `<style>` block — track `#0e0e0e`, thumb `#444444`, hover `#da0037`). The hover-to-crimson is deliberate signal.
+11. **Optional crimson scanline overlay** — `.crimson-scanline` class with `linear-gradient(to bottom, transparent 50%, rgba(218, 0, 55, 0.05) 50%) 0/100% 4px` for CRT atmosphere. Use sparingly on the dashboard hero only.
+
+### v3.1 Color tokens (Tailwind config — extracted verbatim from Stitch Crimson Matrix)
+
+```js
+colors: {
+  // Surfaces (tonal layering)
+  "background":               "#131313",
+  "surface":                  "#131313",
+  "surface-dim":              "#131313",
+  "surface-container-lowest": "#0e0e0e",
+  "surface-container-low":    "#1c1b1b",
+  "surface-container":        "#201f1f",
+  "surface-container-high":   "#2a2a2a",
+  "surface-container-highest": "#353534",
+  "surface-bright":           "#393939",
+  "surface-variant":          "#353534",
+  // Outlines (warm reddish-brown tint)
+  "outline":                  "#ad8887",
+  "outline-variant":          "#5d3f3f",
+  // Text
+  "on-surface":               "#e5e2e1",
+  "on-background":            "#e5e2e1",
+  "on-surface-variant":       "#e6bcbc",   // warm pink — heavy use for secondary text
+  "inverse-surface":          "#e5e2e1",
+  "inverse-on-surface":       "#313030",
+  // Primary — vibrant crimson (use sparingly, keep alarm value)
+  "primary":                  "#ffb3b3",   // light crimson for text/icons on dark
+  "primary-container":        "#da0037",   // signature crimson for actions/alerts
+  "primary-fixed":            "#ffdad9",
+  "primary-fixed-dim":        "#ffb3b3",
+  "surface-tint":             "#ffb3b3",
+  "on-primary":               "#680015",
+  "on-primary-container":     "#ffebea",
+  "on-primary-fixed":         "#400009",
+  "on-primary-fixed-variant": "#920022",
+  "inverse-primary":          "#bf002f",
+  // Secondary — neutral grey (structural / inactive)
+  "secondary":                "#c8c6c6",
+  "secondary-container":      "#474747",
+  "secondary-fixed":          "#e4e2e2",
+  "secondary-fixed-dim":      "#c8c6c6",
+  "on-secondary":             "#303030",
+  "on-secondary-container":   "#b6b5b4",
+  "on-secondary-fixed":       "#1b1c1c",
+  "on-secondary-fixed-variant": "#474747",
+  // Tertiary — alt neutral grey
+  "tertiary":                 "#c6c6c7",
+  "tertiary-container":       "#6c6d6d",
+  "tertiary-fixed":           "#e2e2e2",
+  "tertiary-fixed-dim":       "#c6c6c7",
+  "on-tertiary":              "#2f3131",
+  "on-tertiary-container":    "#f0f0f0",
+  "on-tertiary-fixed":        "#1a1c1c",
+  "on-tertiary-fixed-variant": "#454747",
+  // Error (kept warm pink — must differ from primary visually in context)
+  "error":                    "#ffb4ab",
+  "error-container":          "#93000a",
+  "on-error":                 "#690005",
+  "on-error-container":       "#ffdad6",
+}
+```
+
+### v3.1 Typography (Tailwind config — extracted from Crimson Matrix)
+
+```js
+fontFamily: {
+  // Headlines + labels = JetBrains Mono (developer-tool aesthetic)
+  "headline-lg":        ["JetBrains Mono", "monospace"],
+  "headline-md":        ["JetBrains Mono", "monospace"],
+  "headline-sm":        ["JetBrains Mono", "monospace"],
+  "headline-lg-mobile": ["JetBrains Mono", "monospace"],
+  "label-md":           ["JetBrains Mono", "monospace"],
+  "label-sm":           ["JetBrains Mono", "monospace"],
+  // Body = Geist (legibility under density)
+  "body-lg":            ["Geist", "sans-serif"],
+  "body-md":            ["Geist", "sans-serif"],
+  "body-sm":            ["Geist", "sans-serif"],
+},
+fontSize: {
+  "headline-lg":        ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }],
+  "headline-md":        ["24px", { lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: "600" }],
+  "headline-sm":        ["18px", { lineHeight: "24px", fontWeight: "600" }],
+  "headline-lg-mobile": ["24px", { lineHeight: "30px", fontWeight: "700" }],
+  "body-lg":            ["16px", { lineHeight: "24px", fontWeight: "400" }],
+  "body-md":            ["14px", { lineHeight: "20px", fontWeight: "400" }],
+  "body-sm":            ["12px", { lineHeight: "16px", fontWeight: "400" }],
+  "label-md":           ["12px", { lineHeight: "16px", fontWeight: "500" }],
+  "label-sm":           ["10px", { lineHeight: "12px", fontWeight: "500" }],
+}
+```
+
+Loaded via:
+
+```html
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Geist:wght@400;500;600&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+```
+
+### v3.1 Shape + spacing tokens (Tailwind config)
+
+```js
+borderRadius: {
+  "DEFAULT": "0.125rem",  // 2px — STRICT default for ALL components
+  "lg":      "0.25rem",   // 4px — slightly larger ghosts
+  "xl":      "0.5rem",    // 8px — modals
+  "full":    "9999px",    // pills, avatars, status chips only
+},
+spacing: {
+  "unit":          "4px",
+  "gutter":        "12px",
+  "margin":        "16px",
+  "container-max": "1440px",
+}
+```
+
+> **Note on sidebar width:** Crimson Matrix mockups use Tailwind's default `w-64` (256px) for the sidebar instead of a custom `sidebar-width` token. Implementation should match — use `w-64`.
+
+### v3.1 Tech stack (locked, supersedes v3-green)
+
+- **CSS:** Tailwind CDN — `https://cdn.tailwindcss.com?plugins=forms,container-queries`. The full token block above lives inlined in `base.html` as `<script id="tailwind-config">`.
+- **Icons:** Material Symbols Outlined (Google Fonts CDN). Inline style: `.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }`. Filled icons use `style="font-variation-settings: 'FILL' 1;"`.
+- **Sans (body):** Geist 400/500/600 (Google Fonts CDN).
+- **Mono (headlines + labels + code):** JetBrains Mono 400/500/600/700 (Google Fonts CDN).
+- **Server / HTMX / Alpine / Charts / Graph:** unchanged.
+
+### v3.1 Component vocabulary
+
+- **Sidebar** (`fixed left-0 w-64 h-screen bg-surface-container-low border-r border-surface-container-highest`). Brand header at top: 56px tall (`h-14`) with bottom border `border-surface-container-highest`. Brand icon: 32×32 (`w-8 h-8`) `bg-primary-container rounded` square with filled `psychology` Material Symbol in white. Wordmark "AGENT_BRAIN_V1" in JetBrains Mono `headline-sm` `text-primary` `font-bold`. Operator badge under wordmark in `label-sm text-on-surface-variant opacity-60`. Nav rows: full-row link with `px-4 py-3 flex items-center gap-3`. Section captions: `font-label-sm uppercase tracking-widest text-outline opacity-50`. Active row: `bg-primary-container text-on-primary border-l-2 border-primary` — high-impact crimson fill, not a subtle accent. Inactive: `text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest`.
+- **Top bar** — page-level. `h-14` (56px), `bg-surface border-b border-surface-container-highest`, `px-gutter`. Page title in JetBrains Mono `headline-md` `text-on-surface`. Right side: status pill + version chip in `font-label-sm`.
+- **Cards** — `bg-surface-container border border-surface-container-highest rounded` (2px). Internal padding `p-gutter` (12px) or `p-margin` (16px). Header strip: 1px `border-b border-surface-container-highest` separating title from content.
+- **Hero metric** — single number in JetBrains Mono `headline-lg` (32px / 700 / -0.02em). Below: `body-sm text-on-surface-variant` caption. Optional `.crimson-scanline` overlay for atmosphere.
+- **Tables** — zero radius. `border-collapse: collapse`. Header row `label-sm uppercase text-outline` with `border-b border-surface-container-highest`. Data rows: horizontal 1px borders only (`border-b border-surface-container-highest`). NO vertical borders. NO zebra. Data cells `body-md text-on-surface`. Numeric / ID cells `label-md text-on-surface-variant`. Row hover: `bg-surface-container-high`.
+- **Status pips / chips** — Alert/Active: `rounded-full bg-primary-container text-white px-2 py-0.5 font-label-sm`. Neutral: `rounded-full border border-surface-container-highest text-on-surface-variant px-2 py-0.5 font-label-sm`.
+- **Sparklines** — inline SVG, 80×28 viewBox, single path `stroke="#da0037"` `stroke-width="1.5"` `fill="none"`. No axes, no labels.
+- **Buttons** — Primary: `bg-primary-container text-white rounded px-3 py-1.5 font-label-md hover:bg-inverse-primary` (darken). Secondary (ghost): `bg-transparent border border-surface-container-highest text-on-surface rounded px-3 py-1.5 font-label-md hover:bg-surface-container-highest`.
+- **Inputs** — `bg-surface border border-surface-container-highest rounded px-3 py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary-container focus:outline-none`.
+- **Filter pills** — `rounded-full border border-surface-container-highest px-2 py-0.5 font-label-sm text-on-surface-variant hover:border-primary-container hover:text-primary`.
+- **Scrollbar** — 4px wide, track `#0e0e0e`, thumb `#444444`, hover `#da0037`. Per-page inline `<style>` (or extracted to `app.css`).
+- **Optional crimson scanline** — `.crimson-scanline { background: linear-gradient(to bottom, transparent 50%, rgba(218, 0, 55, 0.05) 50%) 0 / 100% 4px; pointer-events: none; }`. Overlay on hero blocks only.
+
+### v3.1 Verification deltas (supersedes v3-green verification list)
+
+- [ ] Tailwind CDN loads + Crimson Matrix theme config applies (body shows `bg-background` #131313)
+- [ ] Material Symbols icons render filled/outlined correctly with vertical-align middle
+- [ ] JetBrains Mono + Geist both load (no fallback flash)
+- [ ] Sidebar is exactly `w-64` (256px); brand header is `h-14` (56px) with bottom border
+- [ ] Brand icon is a 32×32 crimson square (`bg-primary-container`) with white filled `psychology` icon
+- [ ] Wordmark "AGENT_BRAIN_V1" renders in JetBrains Mono 600 in `text-primary` (#ffb3b3)
+- [ ] Active nav row uses full crimson fill (`bg-primary-container text-on-primary border-l-2 border-primary`) — not a subtle accent
+- [ ] All headlines + labels in JetBrains Mono; body copy in Geist
+- [ ] All numbers/IDs in JetBrains Mono (already mono since headlines are mono — but tabular figures still apply)
+- [ ] Hairlines are 1px `surface-container-highest` (#353534) for structural; `outline-variant` (#5d3f3f) only where the warm-tint variant is wanted
+- [ ] Cards have NO `box-shadow`; depth from tonal layering only
+- [ ] Strict 2px corner radius on ALL non-pill components (default Tailwind `rounded`)
+- [ ] Scrollbar is 4px wide with crimson hover thumb
+- [ ] Primary buttons are solid crimson; secondary buttons are ghost (transparent + border)
+- [ ] Inputs focus to crimson border (`focus:border-primary-container`)
+
+---
+
+## v2 Aesthetic direction (ARCHIVED — superseded by v3)
+
+> Archived for posterity. Do not implement. See `frontend-design/_v2-legacy/` for the prior mockups.
+
+A dark, restrained instrument panel. Stripe-dashboard minimalism, not magazine-editorial.
 
 A dark, restrained instrument panel. Stripe-dashboard minimalism, not magazine-editorial. The brain is a tool; the UI must feel like a quiet developer instrument. Inspired by:
 
@@ -295,16 +486,15 @@ Action bar: `[Invalidate]` `[Revise from diff]` (only if stale) `[Open in recall
 
 Tabbed below: `Children` (chunks), `Recall hits` (recent retrieval_log rows that returned this source).
 
-## Implementation tech (locked)
-
-Per the spec doc (separate Phase 3d section):
+## Implementation tech (v3-locked — see v3 section above for full table)
 
 - **Server:** FastAPI + Jinja2
 - **Interactivity:** HTMX 2 + Alpine.js 3 (tiny client state)
-- **Styling:** Tailwind CDN with custom config inline OR plain CSS with the tokens above
-- **Charts:** Chart.js (CDN, no build step)
-- **Graph:** Cytoscape.js (CDN, future v0.11.2)
-- **Fonts:** Google Fonts CDN (Fraunces, Manrope, JetBrains Mono)
+- **Styling:** Tailwind CDN with the Stitch theme config inlined in `base.html`
+- **Icons:** Material Symbols Outlined (Google Fonts CDN)
+- **Fonts:** Geist + Inter + JetBrains Mono (Google Fonts CDN)
+- **Charts:** inline SVG sparklines (v0.11.0); Chart.js CDN (v0.11.1+)
+- **Graph:** Cytoscape.js (CDN, v0.11.2+)
 
 **No npm. No node. No build step.** Everything ships as static assets bundled with the brain package or pulled via CDN at runtime.
 
@@ -325,16 +515,20 @@ Single command. Refuses to start if `BRAIN_DB_URL` not reachable.
 
 None. Local-only. Document that `--host 0.0.0.0` exposes the brain to the LAN with NO auth — only use in trusted networks.
 
-## Mockups
+## Mockups (v3 — Stitch Persistent Cognition Protocol)
 
 Working HTML mockups bundled at:
 
-- `frontend-design/mockups/dashboard.html`
-- `frontend-design/mockups/sources.html`
-- `frontend-design/mockups/source-detail.html`
-- `frontend-design/assets/styles.css` (shared)
+- `frontend-design/mockups/dashboard.html` (from Stitch `dashboard_dark/code.html`)
+- `frontend-design/mockups/sources.html` (from Stitch `sources_browser_dark/code.html`)
+- `frontend-design/mockups/source-detail.html` (from Stitch `source_detail_dark/code.html`)
+- `frontend-design/mockups/recall.html` (from Stitch `recall_interface_dark/code.html`) — bonus page
 
-These are static HTML with seeded data — no backend needed. Open in a browser to preview the design before implementation begins.
+There is no shared `styles.css` in v3; each mockup inlines its own Tailwind config + small `<style>` block (scrollbar, icon variation settings). Production extracts the config into `base.html` and serves Tailwind via CDN.
+
+Reference screenshots are alongside each mockup as `.png`.
+
+The v2 mockups + `styles.css` are archived at `frontend-design/_v2-legacy/` and must not be used for implementation.
 
 ## Out-of-scope (explicitly)
 

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>brain · telescope</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400,30;0,9..144,400,80;1,9..144,400,40;1,9..144,400,80&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="name">telescope</div>
+      <span class="tag">agent-brain · v0.11.0</span>
+    </div>
+
+    <div class="nav-section">
+      <span class="nav-caption">projects</span>
+    </div>
+    <a class="nav-item" href="#">
+      <span>brain</span>
+      <span class="num">29</span>
+    </a>
+    <a class="nav-item" href="#">
+      <span>hpe-rag</span>
+      <span class="num">3</span>
+    </a>
+    <a class="nav-item" href="#">
+      <span>InkVell</span>
+      <span class="num">12</span>
+    </a>
+
+    <div class="nav-section">
+      <span class="nav-caption">insights</span>
+    </div>
+    <a class="nav-item active" href="dashboard.html"><span>→ &nbsp;Dashboard</span></a>
+    <a class="nav-item" href="sources.html"><span>Sources</span></a>
+    <a class="nav-item" href="#"><span>Sessions</span></a>
+    <a class="nav-item" href="#"><span>Retrieval</span></a>
+    <a class="nav-item" href="#"><span>Knowledge graph</span></a>
+    <a class="nav-item" href="#"><span>Console</span></a>
+
+    <div class="nav-section">
+      <span class="nav-caption">system</span>
+    </div>
+    <a class="nav-item" href="#"><span>Hooks</span></a>
+    <a class="nav-item" href="#"><span>Health</span></a>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1 class="title">Dashboard</h1>
+      <div class="meta">
+        <span class="status-pill">connected · 127.0.0.1:5433</span>
+        <span>brain · v0.10.1</span>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero">
+      <span class="hero-eyebrow">captures · all time</span>
+      <div class="hero-value">44</div>
+      <p class="hero-caption">
+        Across <em>3</em> projects, <em>22</em> sessions.
+        <em>+5</em> this week. Last capture <em>2h ago</em> —
+        a decision about <span style="color: var(--accent-cool-bright); font-family: var(--font-mono); font-size: 0.875rem;">v0.10.0 isolated test DB</span>.
+      </p>
+    </div>
+
+    <div class="editorial">
+      The brain holds short-term momentum + long-term recall. Below: three vectors of health — what's being captured, who's not capturing enough, and what's drifting out of sync.
+    </div>
+
+    <!-- Row 1 -->
+    <div class="grid grid-3">
+
+      <!-- Capture cadence -->
+      <div class="card">
+        <div class="card-title">capture cadence · 30d</div>
+        <div class="card-value">29</div>
+        <div class="card-delta">
+          <span class="pos">+8</span> vs prior 30d window
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+            <path d="M0,28 L7,26 L14,28 L21,22 L28,24 L35,18 L42,21 L49,16 L56,19 L63,12 L70,15 L77,10 L84,14 L91,8 L98,11 L105,6 L112,9 L119,5 L126,8 L133,4 L140,7 L147,6 L154,9 L161,5 L168,4 L175,3 L182,5 L189,4 L196,3 L200,2"/>
+          </svg>
+        </div>
+        <div class="card-breakdown">
+          <div class="breakdown-row">
+            <span class="label">decisions</span>
+            <span class="val">8</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">gotchas</span>
+            <span class="val">14</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">patterns</span>
+            <span class="val">3</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">notes</span>
+            <span class="val">4</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compliance -->
+      <div class="card">
+        <div class="card-title">compliance · 30d</div>
+        <div class="card-value">2</div>
+        <div class="card-delta"><span class="warn">under-captured sessions</span> · strict mode <strong style="color: var(--success);">ON</strong></div>
+        <div class="card-breakdown">
+          <div class="breakdown-row">
+            <span class="label">thin bundles</span>
+            <span class="val" style="color: var(--accent-warm);">1</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">avg turn count</span>
+            <span class="val">14</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">avg captures / sess</span>
+            <span class="val">3.2</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">strict_mode exits</span>
+            <span class="val">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Staleness -->
+      <div class="card">
+        <div class="card-title">staleness</div>
+        <div class="card-value" style="color: var(--accent-warm);">3</div>
+        <div class="card-delta"><span class="warn">stale sources flagged</span></div>
+        <div class="card-breakdown">
+          <div class="breakdown-row">
+            <span class="label">changed</span>
+            <span class="val" style="color: var(--accent-warm);">2</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">missing</span>
+            <span class="val" style="color: var(--danger);">1</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">untracked</span>
+            <span class="val">0</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">scanned</span>
+            <span class="val">9</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Row 2 -->
+    <div class="grid grid-2" style="margin-top: var(--s-5);">
+
+      <!-- Failures -->
+      <div class="card" style="grid-column: span 2; grid-template-columns: 1fr;">
+        <div class="card-title">active failures · top 5 by retry_count</div>
+        <table style="margin-top: var(--s-3);">
+          <thead>
+            <tr>
+              <th style="width: 4rem;">id</th>
+              <th>target_problem</th>
+              <th>attempted_approach</th>
+              <th style="width: 5rem; text-align: right;">retries</th>
+              <th style="width: 9rem;">last attempt</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row">
+              <td class="mono">[1]</td>
+              <td>git log --oneline main..HEAD; stat chain failed</td>
+              <td class="preview">Bash: git log --oneline main..HEAD; echo "—STAT—"; git diff</td>
+              <td class="mono" style="text-align: right; color: var(--accent-warm);">3</td>
+              <td class="mono">May 27 04:42</td>
+            </tr>
+            <tr class="row">
+              <td class="mono">[7]</td>
+              <td>Convert the html to pdf</td>
+              <td class="preview">Bash: which wkhtmltopdf weasyprint chromium google-chrome</td>
+              <td class="mono" style="text-align: right; color: var(--accent-warm);">6</td>
+              <td class="mono">May 26 16:55</td>
+            </tr>
+            <tr class="row">
+              <td class="mono">[14]</td>
+              <td>pandoc html → pdf engines</td>
+              <td class="preview">Bash: pandoc --version 2>&1 | head -3 && echo "—ENGINES—"</td>
+              <td class="mono" style="text-align: right;">5</td>
+              <td class="mono">May 26 17:30</td>
+            </tr>
+            <tr class="row">
+              <td class="mono">[43]</td>
+              <td>install Postgres pgvector on Arch</td>
+              <td class="preview">docker-compose with pgvector/pgvector:pg16 image</td>
+              <td class="mono" style="text-align: right;">2</td>
+              <td class="mono">May 27 06:57</td>
+            </tr>
+            <tr class="row">
+              <td class="mono">[48]</td>
+              <td>push to origin</td>
+              <td class="preview">Bash: git push origin main && git push origin v0.6.0</td>
+              <td class="mono" style="text-align: right;">1</td>
+              <td class="mono">May 27 06:58</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Embedding coverage -->
+      <div class="card">
+        <div class="card-title">embedding coverage · substantive kinds</div>
+        <div class="card-value" style="color: var(--success);">91<span style="color: var(--fg-3); font-size: 1.5rem;">%</span></div>
+        <div class="card-delta">42 of 46 captures embedded</div>
+        <div class="sparkline">
+          <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+            <path d="M0,16 L20,15 L40,12 L60,10 L80,8 L100,6 L120,5 L140,4 L160,4 L180,3 L200,3"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Recent recall hit rate -->
+      <div class="card">
+        <div class="card-title">recall log · last 7d</div>
+        <div class="card-value">14</div>
+        <div class="card-delta">queries · <span class="pos">93%</span> non-abstain rate</div>
+        <div class="card-breakdown">
+          <div class="breakdown-row">
+            <span class="label">avg top-1 score</span>
+            <span class="val">0.834</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="label">abstain count</span>
+            <span class="val">1</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

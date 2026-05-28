@@ -45,3 +45,38 @@ Validates against the `RevisionPlan` schema. The plan is **never executed automa
 ## Output budget
 
 ≤300 tokens. List the headline `invalidate`s and any contradictions; defer detail to the cached output.
+
+## Variant: --from-diff (v0.10.0)
+
+When `agent-brain:brain-staleness` flags a source as `changed`, use the diff-aware variant to decide whether the captured claim still holds:
+
+```bash
+# Get the diff hunk for the changed file.
+DIFF=$(git diff <since>..HEAD -- <path-from-staleness-output>)
+
+# Prepare the revise prompt (brain reads source + neighbors + diff).
+brain revise prepare-from-diff --source-id <id> --diff "$DIFF"
+# → emits prompt + cache_key.
+
+# You synthesize the JSON per the DiffRevisionPlan schema, then:
+brain revise finalize-from-diff --cache-key <hex> --output '<json>'
+```
+
+The plan output (invalidations / reassertions / creations) is human-gated. Apply invalidations via `brain.write.invalidate(<source_id>, reason='...')` or re-capture the new claim with `brain write --kind decision ... --from-file <path>`.
+
+`DiffRevisionPlan` shape:
+
+```json
+{
+  "invalidations": [{"source_id": 42, "reason": "diff replaces sha256 with blake2b"}],
+  "reassertions": [{"source_id": 51, "reason": "diff reinforces async-first pattern"}],
+  "creations": [{"content": "new claim", "kind": "gotcha", "uri": "..."}]
+}
+```
+
+The pipeline:
+1. `brain staleness diff` flags source 42 (file changed).
+2. `brain revise prepare-from-diff --source-id 42 --diff <hunk>` emits the prompt.
+3. Agent synthesizes a `DiffRevisionPlan` JSON.
+4. `brain revise finalize-from-diff` validates.
+5. Agent applies each invalidation manually (gated).

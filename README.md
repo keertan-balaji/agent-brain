@@ -295,6 +295,19 @@ New skill: `brain-staleness` (triage surface). Operations: `docs/v0.9.0-stalenes
 
 Follow-on plan queued: 3a-3 (Obsidian file watcher — vault-side, different from code staleness).
 
+## Agent Brain v0.10.0 — Diff-Aware Semantic Revise
+
+When `brain staleness` flags a captured source as `changed`, run `brain revise prepare-from-diff` to decide whether the captured claim still holds. The brain assembles the source + neighbors + diff hunk into a prompt; the agent synthesizes a `DiffRevisionPlan` JSON (invalidations / reassertions / creations); `brain revise finalize-from-diff` validates. Closes the semantic gap between staleness (file changed) and certainty (claim invalidated).
+
+```bash
+DIFF=$(git diff main..HEAD -- src/db.py)
+brain revise prepare-from-diff --source-id 42 --diff "$DIFF"
+# Agent synthesizes JSON per DiffRevisionPlan schema.
+brain revise finalize-from-diff --cache-key <hex> --output '<json>'
+```
+
+Plan: `docs/superpowers/plans/2026-05-28-agent-brain-v0.10.x-quality-and-discipline.md`.
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-05-17-obsidian-second-brain-skill-pack-design.md`

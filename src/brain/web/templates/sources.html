@@ -26,6 +26,7 @@
           placeholder="Search sources..."
           type="text"
           name="q"
+          value="{{ q or '' }}"
           hx-get="/_htmx/sources"
           hx-trigger="input changed delay:200ms"
           hx-target="#source-rows"
@@ -50,9 +51,6 @@
     </span>
     {% endif %}
     {% include 'partials/_filter_pills.html' %}
-    {% if not kind %}
-    <span class="text-on-surface-variant font-label-sm text-label-sm opacity-50">None active</span>
-    {% endif %}
   </div>
 
   <!-- Data Table -->

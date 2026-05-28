@@ -1,3 +1,9 @@
 {% for row in rows %}
   {% include 'partials/_source_row.html' %}
+{% else %}
+  <tr>
+    <td colspan="6" class="text-center text-on-surface-variant font-body-sm py-8">
+      No results{% if q %} for "<span class="font-label-md text-primary">{{ q }}</span>"{% endif %}.
+    </td>
+  </tr>
 {% endfor %}

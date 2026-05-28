@@ -169,5 +169,13 @@ def test_sources_page_has_kind_filter_pills(client: TestClient) -> None:
     """Filter pills link to /sources?kind=<KIND> for each substantive kind."""
     res = client.get("/sources")
     assert res.status_code == 200
-    for kind in ["decision", "gotcha", "pattern", "note"]:
+    for kind in ["decision", "gotcha", "pattern", "note", "subtask_summary", "session_summary", "faq"]:
         assert f"/sources?kind={kind}" in res.text
+
+
+def test_htmx_sources_empty_state_shows_no_results(client: TestClient) -> None:
+    """When filter returns nothing, partial shows 'No results' with query echoed back."""
+    res = client.get("/_htmx/sources?q=zzzzz-no-such-string")
+    assert res.status_code == 200
+    assert "No results" in res.text
+    assert "zzzzz-no-such-string" in res.text  # query echoed back

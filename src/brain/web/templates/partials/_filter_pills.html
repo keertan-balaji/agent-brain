@@ -1,15 +1,14 @@
-{% set kinds = ['decision', 'gotcha', 'pattern', 'note', 'subtask_summary', 'session_summary', 'faq'] %}
+{% set q_suffix = "&q=" ~ (q|urlencode) if q else "" %}
+{% set kinds = ['decision','gotcha','pattern','note','subtask_summary','session_summary','faq'] %}
 <div id="filter-pills" class="flex gap-2 flex-wrap">
-  <a href="/sources" class="rounded-full px-2 py-0.5 font-label-sm border
-    {% if not kind %}bg-primary-container text-on-primary border-primary-container
-    {% else %}border-surface-container-highest text-on-surface-variant hover:border-primary-container hover:text-primary{% endif %}">
-    all
-  </a>
+  <a href="/sources{% if q %}?q={{ q|urlencode }}{% endif %}"
+     class="rounded-full px-2 py-0.5 font-label-sm border
+       {% if not kind %}bg-primary-container text-on-primary border-primary-container
+       {% else %}border-surface-container-highest text-on-surface-variant hover:border-primary-container hover:text-primary{% endif %}">all</a>
   {% for k in kinds %}
-    <a href="/sources?kind={{ k }}" class="rounded-full px-2 py-0.5 font-label-sm border
-      {% if kind == k %}bg-primary-container text-on-primary border-primary-container
-      {% else %}border-surface-container-highest text-on-surface-variant hover:border-primary-container hover:text-primary{% endif %}">
-      {{ k }}
-    </a>
+  <a href="/sources?kind={{ k }}{{ q_suffix }}"
+     class="rounded-full px-2 py-0.5 font-label-sm border
+       {% if kind == k %}bg-primary-container text-on-primary border-primary-container
+       {% else %}border-surface-container-highest text-on-surface-variant hover:border-primary-container hover:text-primary{% endif %}">{{ k }}</a>
   {% endfor %}
 </div>

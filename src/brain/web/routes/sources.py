@@ -15,13 +15,14 @@ router = APIRouter()
 def sources(
     request: Request,
     kind: str | None = Query(None),
+    q: str = Query("", max_length=200),
     page: int = Query(1, ge=1),
 ) -> HTMLResponse:
     page_data = list_sources(request.app.state.engine, kind=kind, page=page, per_page=30)
     return templates.TemplateResponse(
         request,
         "sources.html",
-        {"page": page_data, "kind": kind, "active": "sources"},
+        {"page": page_data, "kind": kind, "q": q, "active": "sources"},
     )
 
 

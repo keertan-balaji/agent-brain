@@ -8,27 +8,27 @@
 
 A local web frontend for the agent-brain — a single-glance instrument panel that surfaces the brain's state to the human user. The agent uses the CLI / hooks; the human uses this UI to inspect what the agent has captured and how it's performing.
 
-## Aesthetic direction: "Brain Telescope"
+## Aesthetic direction: "Brain Telescope" (v2 — minimal redesign)
 
-A dark, refined instrument for observing memory state. The brain is a quiet observatory — the UI must feel like stepping into it. Inspired by:
+A dark, restrained instrument panel. Stripe-dashboard minimalism, not magazine-editorial. The brain is a tool; the UI must feel like a quiet developer instrument. Inspired by:
 
-- The Voyager Golden Record etching aesthetic (precise, technical)
+- Stripe's developer dashboard (mono numbers, sparse tables)
+- Linear (restrained sans, tight whitespace)
+- Apple Console.app / macOS system tools (system-ui typography)
 - Edward Tufte small multiples + sparklines
-- Linear's command modals + fluid transitions
-- Stripe's old developer dashboard (monospace numbers, clean tables)
-- Architectural drawings (precise grids, hairline rules)
 
 **Visual commitments (non-negotiable):**
 
-1. **Very dark canvas** — `#0a0a0c` (near-black with cool tint). Not pure black; not generic charcoal.
-2. **Off-white text** — `#ebebef`. Not pure white. Slight warmth.
+1. **Very dark canvas** — `#0a0a0b` (near-black with cool tint). Not pure black; not generic charcoal.
+2. **Off-white text** — `#f0f0f3`. Not pure white. Slight warmth.
 3. **One warm accent** — `#d4a14e` (amber) — used sparingly for warnings, staleness, "needs attention" indicators.
-4. **One cool accent** — `#3d6f73` (deep teal) — used for healthy/active states, links, focus rings.
-5. **Hairline rules** — `#1f1f24` at 1px exactly. Almost not there. Structure without weight.
-6. **No icon library.** Type weight + space + monospace numerals carry hierarchy. Only icons allowed: a single navigation glyph (custom-drawn or unicode arrow `→`), maybe a search icon.
-7. **Monospace numbers everywhere** — JetBrains Mono for IDs, counts, timestamps, scores. Reinforces the "instrument" tone.
-8. **Generous whitespace + asymmetric breaks** — pages are mostly empty space with the data nodes given room to breathe.
-9. **Subtle film-grain texture overlay** — `noise.svg` low-opacity layer for atmosphere.
+4. **One cool accent** — `#4a8a92` (deep teal) — used for healthy/active states, sparklines.
+5. **Hairline rules** — `#1f1f23` at 1px exactly. Almost not there. Structure without weight.
+6. **No icon library.** Type weight + space + monospace numerals carry hierarchy.
+7. **Monospace numbers everywhere** — `ui-monospace` (SF Mono on Apple) for IDs, counts, timestamps, scores. Reinforces the "instrument" tone.
+8. **Generous whitespace** — pages are mostly empty space with the data nodes given room to breathe.
+9. **NO film-grain overlay** (removed in redesign — added visual noise the design didn't need).
+10. **Single sans family** — `system-ui` (SF Pro on Apple, system default elsewhere). NO serif. NO custom display font. Aesthetic comes from spacing + weight + restraint, not from typeface drama.
 
 ## Color tokens
 
@@ -57,38 +57,50 @@ A dark, refined instrument for observing memory state. The brain is a quiet obse
 }
 ```
 
-## Typography
+## Typography (v2 — system-only)
 
 ```css
-/* Display (page titles, large numbers in hero blocks) */
-font-family: 'Fraunces', 'Times New Roman', serif;
-font-variation-settings: 'opsz' 144, 'SOFT' 50, 'WONK' 0;
+/* All sans uses the OS native UI font.
+   On macOS / iOS  → SF Pro (Display + Text)
+   On Windows      → Segoe UI
+   On Linux        → system default
+   Fallback chain to Helvetica Neue / Helvetica then generic sans-serif. */
+--font-sans: -apple-system, BlinkMacSystemFont, system-ui, 'Helvetica Neue', Helvetica, sans-serif;
 
-/* Body / UI */
-font-family: 'Manrope', sans-serif;
-
-/* Numbers, IDs, paths, timestamps */
-font-family: 'JetBrains Mono', monospace;
+/* Numbers, IDs, paths, timestamps.
+   On macOS / iOS → SF Mono
+   Fallback to JetBrains Mono / Menlo / Consolas. */
+--font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 ```
 
 **Why these choices:**
-- **Fraunces** — variable serif with SOFT and OPTSZ axes. The display style at 144pt feels editorial-magazine, not generic-corporate.
-- **Manrope** — modern geometric sans with personality. Avoids the Inter / Roboto generic look.
-- **JetBrains Mono** — has the right "code-meets-instrument" character. Better than Fira Code for numbers (no ligature distractions for our use case).
+- **system-ui / -apple-system** — zero font-loading delay (no CDN fetch), most minimal possible. On Apple devices renders as SF Pro, which has the exact restrained-tool aesthetic we want. NO custom display font. Aesthetic comes from spacing + weight + restraint.
+- **ui-monospace** — same logic for the mono leg. SF Mono on Apple, JetBrains Mono fallback.
 
-**Type scale:**
+**Type scale (v2 — quieter):**
 
 | Token | Size | Use |
 |---|---|---|
-| `--text-hero` | 4.5rem (72px) | Hero metric on dashboard |
-| `--text-display` | 2.5rem (40px) | Page titles (Fraunces) |
-| `--text-h2` | 1.5rem (24px) | Section headings |
-| `--text-h3` | 1.125rem (18px) | Subsection / card titles |
-| `--text-body` | 0.9375rem (15px) | Body text |
-| `--text-mono` | 0.875rem (14px) | Mono / tabular |
-| `--text-small` | 0.8125rem (13px) | Captions, metadata |
+| `--text-hero` | 5rem (80px) | Hero metric on dashboard, weight 300 |
+| `--text-display` | 1.875rem (30px) | Page titles, weight 500 |
+| `--text-h2` | 1.25rem (20px) | Section headings, weight 500 |
+| `--text-h3` | 0.9375rem (15px) | Subsection / card titles |
+| `--text-body` | 0.875rem (14px) | Body text |
+| `--text-mono` | 0.8125rem (13px) | Mono / tabular |
+| `--text-small` | 0.75rem (12px) | Captions, eyebrows |
 
-**Line heights:** display 1.0, body 1.55, mono 1.5.
+**Type weight rules:**
+- Hero metric: **300** (light) — large numbers shouldn't shout
+- Page titles: **500** (medium)
+- Card titles + table headers: **500** (medium), uppercase 0.04em letter-spaced
+- Body: **400** (regular)
+- Card values: **400** (regular) at 2rem
+
+**Line heights:** display 0.95, body 1.5, mono 1.5.
+
+**Tabular numerals:** every numeric value uses `font-feature-settings: 'tnum'` so digits align in tables.
+
+**Letter-spacing:** body text `-0.005em` (slight tightening for SF Pro), display `-0.025em`, hero `-0.04em`.
 
 ## Spacing scale
 

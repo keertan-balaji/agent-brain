@@ -35,33 +35,32 @@ The mockups are static HTML/CSS with seeded data. They demonstrate the EXACT des
 3. Read the implementation plan: `docs/superpowers/plans/2026-05-28-agent-brain-v0.11.0-frontend.md`.
 4. If the design is approved, invoke `superpowers:subagent-driven-development` and execute the plan task-by-task.
 
-## Aesthetic summary
+## Aesthetic summary (v2 — minimal redesign)
 
-**Brain Telescope** — a dark, refined instrument for observing memory state.
+**Brain Telescope** — a dark, restrained instrument panel. Stripe-dashboard minimalism, not magazine-editorial.
 
 | Token | Value | Why |
 |---|---|---|
-| Background | `#0a0a0c` | Near-black with cool tint; observatory atmosphere |
-| Text | `#ebebef` | Off-white, slight warmth |
+| Background | `#0a0a0b` | Near-black with cool tint |
+| Text | `#f0f0f3` | Off-white, slight warmth |
 | Warm accent | `#d4a14e` | Amber — staleness, warnings (SPARINGLY) |
-| Cool accent | `#3d6f73` | Deep teal — healthy, active states |
-| Hairline | `#1f1f24` | 1px borders; structure without weight |
-| Display | **Fraunces** (variable serif, italic) | Editorial headlines, hero metrics |
-| Body | **Manrope** | Modern geometric sans, not generic |
-| Mono | **JetBrains Mono** | All numbers, IDs, paths, timestamps |
+| Cool accent | `#4a8a92` | Deep teal — healthy, active states, sparklines |
+| Hairline | `#1f1f23` | 1px borders; structure without weight |
+| Sans | **system-ui / -apple-system** (SF Pro on Apple) | Native OS font; zero load delay; restrained tool aesthetic |
+| Mono | **ui-monospace** (SF Mono on Apple) | All numbers, IDs, paths, timestamps |
 
-**No icon library.** Type weight + whitespace + monospace numerals carry hierarchy.
+**No icon library. No custom display font. No film-grain overlay.** Aesthetic comes from spacing + weight + restraint.
 
 ## Key design moves that must survive implementation
 
-1. **Hero metric on dashboard** — single huge Fraunces italic number. The vibe-setter.
-2. **Monospace numbers EVERYWHERE.** IDs, counts, timestamps, scores. Instrument-panel feel.
+1. **Hero metric on dashboard** — single huge sans number at weight 300, 5rem, letter-spaced -0.04em. NO serif, NO italic.
+2. **Monospace numbers EVERYWHERE.** IDs, counts, timestamps, scores. With `font-feature-settings: 'tnum'` for tabular alignment.
 3. **Single-color accents.** Amber means "needs attention." Teal means "healthy / active." Never use both on the same element.
-4. **Sparklines, no axes.** Pure Tufte sparkline — 80×24px SVG path. No labels, no legend.
-5. **Editorial italic for section descriptions.** Fraunces italic at body size — adds magazine warmth between data blocks.
-6. **Subtle film-grain overlay.** A 600-byte SVG noise at 3% opacity. Already implemented in `styles.css`.
-7. **Page-load stagger.** 50ms delay between cards. Already implemented.
-8. **Hairline rules at 1px exactly.** Not 0.5px (browser inconsistency). Not 2px (too heavy).
+4. **Sparklines, no axes.** Pure Tufte sparkline — 80×28px SVG path. No labels, no legend.
+5. **Quiet `.lede` paragraphs**, not editorial italic. Plain sans at body size, `--fg-2` color.
+6. **Page-load stagger.** 40ms delay between cards.
+7. **Hairline rules at 1px exactly.** Not 0.5px (browser inconsistency). Not 2px (too heavy).
+8. **Letter-spacing tightened slightly** for SF Pro (`-0.005em` body, `-0.025em` display, `-0.04em` hero). On non-Apple systems falls back gracefully.
 
 ## Tech stack (locked, no debate)
 
@@ -94,23 +93,27 @@ Skipped to v0.11.1+:
 
 | If you find yourself reaching for | Refuse |
 |---|---|
-| Inter / Roboto / system-ui fonts | Use Manrope or Fraunces |
+| Adding a serif display font (Fraunces, Newsreader, etc.) | Stick with `--font-sans` (system-ui) only |
+| Loading Google Fonts at all | NOT NEEDED in v2 — system fonts only, zero CDN |
 | Tailwind defaults (zinc-900, etc.) | Use the CSS variables from `styles.css` |
 | Material icons / Heroicons library | Use type weight + spacing instead |
 | Purple gradient backgrounds | Don't |
+| Film-grain or noise overlays | Removed in v2 — too decorative |
 | Spinning loaders | Use a thin progress bar at page top |
 | Light theme toggle | Out of scope; dark only |
 | Drop shadows on cards | Use hairline borders only |
 | Border-radius > 6px on cards | Sharp-ish rectangles only |
+| Heavy font weights (700+) | Cap at 500 (medium); hero is 300 (light) |
 
 ## Verification before merge
 
 - [ ] All 3 mockups render identically (or better) in production HTML
-- [ ] Dashboard hero metric is Fraunces italic at 4.5rem
-- [ ] All numbers in tables are JetBrains Mono
-- [ ] Hairline borders are 1px and color `#1f1f24`
-- [ ] Cards animate with stagger on initial load
-- [ ] Hover states are 120ms ease-out
-- [ ] Film-grain overlay visible at 3% opacity
+- [ ] Dashboard hero metric is sans, weight 300, 5rem
+- [ ] All numbers use `ui-monospace` / SF Mono with `font-feature-settings: 'tnum'`
+- [ ] Hairline borders are 1px and color `#1f1f23`
+- [ ] Cards animate with stagger on initial load (40ms delay)
+- [ ] Hover states are 100-150ms ease-out
+- [ ] NO custom font CDN fetches (zero `<link href="fonts.googleapis.com">`)
 - [ ] Status pill shows green dot when DB reachable
-- [ ] Page loads under 200ms (no CDN fonts blocking render — use `font-display: swap`)
+- [ ] Page loads under 100ms (no font-loading delay)
+- [ ] On macOS the page should render in SF Pro automatically — verify by inspecting computed font-family on `<body>`

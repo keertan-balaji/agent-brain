@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>brain · telescope · source 42</title>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400,30;0,9..144,400,80;1,9..144,400,40;1,9..144,400,80&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/styles.css">
 </head>
 <body>
@@ -26,7 +25,7 @@
       <span class="nav-caption">insights</span>
     </div>
     <a class="nav-item" href="dashboard.html"><span>Dashboard</span></a>
-    <a class="nav-item active" href="sources.html"><span>→ &nbsp;Sources</span></a>
+    <a class="nav-item active" href="sources.html"><span>Sources</span></a>
     <a class="nav-item" href="#"><span>Sessions</span></a>
     <a class="nav-item" href="#"><span>Retrieval</span></a>
     <a class="nav-item" href="#"><span>Knowledge graph</span></a>
@@ -41,19 +40,19 @@
 
   <main class="main">
     <div class="topbar">
-      <h1 class="title" style="font-size: 1.875rem;"><em style="font-style: normal; color: var(--fg-3);">sources</em> &nbsp;/&nbsp; <em style="font-style: normal;">42</em></h1>
+      <h1 class="title" style="color: var(--fg-2);">Sources <span style="color: var(--fg-3); margin: 0 var(--s-2);">/</span> <span style="color: var(--fg-1);">42</span></h1>
       <div class="meta">
         <span class="status-pill" style="border-color: var(--accent-warm); color: var(--accent-warm);">
-          <span style="background: var(--accent-warm); width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 6px var(--accent-warm);"></span>
+          <span style="background: var(--accent-warm); width: 5px; height: 5px; border-radius: 50%; display: inline-block;"></span>
           stale · changed
         </span>
-        <span>brain · v0.10.1</span>
+        <span>v0.10.1</span>
       </div>
     </div>
 
     <div class="detail-header">
       <span class="detail-id">[42]</span>
-      <span class="detail-kind">decision</span>
+      <span class="tag-kind">decision</span>
       <span class="detail-uri">decision://hash-algo</span>
     </div>
 
@@ -65,21 +64,21 @@
 Captured from src/hash.py:1-12 at commit f3bf1d4 (branch=main) on 2026-05-28.</div>
 
         <div class="action-bar">
-          <button class="btn btn-warn">Revise from diff →</button>
+          <button class="btn btn-warn">Revise from diff</button>
           <button class="btn btn-danger">Invalidate</button>
           <button class="btn">Open in console</button>
         </div>
 
-        <h3 style="margin-top: var(--s-7); font-family: var(--font-display); font-style: italic; font-size: 1.5rem; color: var(--fg-2); font-variation-settings: 'opsz' 144, 'SOFT' 40;">Recent recall hits</h3>
-        <p class="editorial" style="margin-top: var(--s-3); font-size: var(--text-body);">Queries that retrieved this source in the last 30 days.</p>
+        <h3 style="margin-top: var(--s-8); font-family: var(--font-sans); font-size: var(--text-h2); color: var(--fg-1); font-weight: 500; letter-spacing: -0.015em;">Recent recall hits</h3>
+        <p class="lede" style="margin-top: var(--s-2); margin-bottom: var(--s-5);">Queries that retrieved this source in the last 30 days.</p>
 
         <table>
           <thead>
             <tr>
-              <th style="width: 8rem;">when</th>
+              <th style="width: 7rem;">when</th>
               <th>query</th>
-              <th style="width: 6rem; text-align: right;">rank</th>
-              <th style="width: 7rem; text-align: right;">score</th>
+              <th style="width: 5rem; text-align: right;">rank</th>
+              <th style="width: 6rem; text-align: right;">score</th>
             </tr>
           </thead>
           <tbody>
@@ -130,38 +129,32 @@ Captured from src/hash.py:1-12 at commit f3bf1d4 (branch=main) on 2026-05-28.</d
           <span class="label">provenance kind</span>
           <span class="val">captured</span>
         </div>
-        <div class="meta-block">
-          <span class="label">project</span>
-          <span class="val">brain</span>
-        </div>
 
-        <div style="border-top: 1px solid var(--line-1); padding-top: var(--s-4); margin-top: var(--s-3);">
-          <span class="label" style="font-family: var(--font-body); font-size: 0.6875rem; font-weight: 600; color: var(--fg-3); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: var(--s-3);">provenance</span>
-          <div style="display: flex; flex-direction: column; gap: var(--s-3);">
-            <div>
-              <div class="mono" style="color: var(--fg-1); font-size: 0.8125rem; word-break: break-all;">src/hash.py:1-12</div>
-              <div class="mono" style="color: var(--fg-3); font-size: 0.6875rem; margin-top: 2px;">sha256: 7a3c9e02…f8a1</div>
-              <div class="mono" style="color: var(--accent-warm); font-size: 0.6875rem; margin-top: 4px;">▲ now: e9b1227f…0a93 (diverged)</div>
-            </div>
+        <div style="border-top: 1px solid var(--line-1); padding-top: var(--s-5);">
+          <span class="label" style="font-family: var(--font-sans); font-size: 0.6875rem; font-weight: 500; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: var(--s-3);">provenance</span>
+          <div>
+            <div class="val" style="word-break: break-all;">src/hash.py:1-12</div>
+            <div style="font-family: var(--font-mono); color: var(--fg-3); font-size: 0.6875rem; margin-top: 4px;">sha256: 7a3c9e02…f8a1</div>
+            <div style="font-family: var(--font-mono); color: var(--accent-warm); font-size: 0.6875rem; margin-top: 4px;">→ now: e9b1227f…0a93 (diverged)</div>
           </div>
         </div>
 
-        <div style="border-top: 1px solid var(--line-1); padding-top: var(--s-4); margin-top: var(--s-3);">
-          <span class="label" style="font-family: var(--font-body); font-size: 0.6875rem; font-weight: 600; color: var(--fg-3); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: var(--s-3);">commit at capture</span>
-          <div class="mono" style="color: var(--fg-1); font-size: 0.8125rem;">f3bf1d4</div>
-          <div class="mono" style="color: var(--fg-3); font-size: 0.6875rem; margin-top: 2px;">branch: main</div>
+        <div style="border-top: 1px solid var(--line-1); padding-top: var(--s-5);">
+          <span class="label" style="font-family: var(--font-sans); font-size: 0.6875rem; font-weight: 500; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: var(--s-3);">commit at capture</span>
+          <div class="val">f3bf1d4</div>
+          <div style="font-family: var(--font-mono); color: var(--fg-3); font-size: 0.6875rem; margin-top: 4px;">branch: main</div>
         </div>
 
-        <div style="border-top: 1px solid var(--line-1); padding-top: var(--s-4); margin-top: var(--s-3);">
-          <span class="label" style="font-family: var(--font-body); font-size: 0.6875rem; font-weight: 600; color: var(--fg-3); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: var(--s-3);">neighbors</span>
+        <div style="border-top: 1px solid var(--line-1); padding-top: var(--s-5);">
+          <span class="label" style="font-family: var(--font-sans); font-size: 0.6875rem; font-weight: 500; color: var(--fg-3); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: var(--s-3);">neighbors</span>
           <a href="#" style="display: block; padding: var(--s-2) 0; color: var(--fg-1); font-size: var(--text-body); text-decoration: none; border-bottom: 1px solid var(--line-1);">
-            <span class="mono" style="color: var(--fg-3); font-size: 0.75rem;">[51]</span> &nbsp; FIPS compliance constraints
+            <span class="mono" style="color: var(--fg-3); font-size: 0.6875rem;">51</span> &nbsp; FIPS compliance constraints
           </a>
           <a href="#" style="display: block; padding: var(--s-2) 0; color: var(--fg-1); font-size: var(--text-body); text-decoration: none; border-bottom: 1px solid var(--line-1);">
-            <span class="mono" style="color: var(--fg-3); font-size: 0.75rem;">[58]</span> &nbsp; blake2b benchmark vs sha256
+            <span class="mono" style="color: var(--fg-3); font-size: 0.6875rem;">58</span> &nbsp; blake2b benchmark vs sha256
           </a>
           <a href="#" style="display: block; padding: var(--s-2) 0; color: var(--fg-1); font-size: var(--text-body); text-decoration: none;">
-            <span class="mono" style="color: var(--fg-3); font-size: 0.75rem;">[7]</span> &nbsp; relax CHECK constraint pattern
+            <span class="mono" style="color: var(--fg-3); font-size: 0.6875rem;">7</span> &nbsp; relax CHECK constraint pattern
           </a>
         </div>
       </aside>

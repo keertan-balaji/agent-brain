@@ -6,7 +6,7 @@
 
 **Architecture:** New `src/brain/web/` Python package. FastAPI app with Jinja2 templates rendering pages that match the "Brain Telescope" design exactly (see `frontend-design/mockups/*.html` for pixel-locked references + `frontend-design/assets/styles.css` for the shared stylesheet). HTMX for partial-page swaps (filter pills, pagination). Alpine.js for tiny client-side state (cmd-K modal). Zero npm / node toolchain — all CSS bundled with the brain package, fonts via Google CDN, JS libs via CDN. New `brain serve` CLI command launches Uvicorn on `127.0.0.1:8765` by default.
 
-**Tech Stack:** Python 3.12, FastAPI, Jinja2, Uvicorn, HTMX 2 (CDN), Alpine.js 3 (CDN), Google Fonts (Fraunces / Manrope / JetBrains Mono). New runtime deps: `fastapi`, `uvicorn[standard]`, `jinja2`. No frontend build step.
+**Tech Stack:** Python 3.12, FastAPI, Jinja2, Uvicorn, HTMX 2 (CDN), Alpine.js 3 (CDN). **System fonts only — no Google Fonts CDN, no font files bundled.** `system-ui` / `-apple-system` for sans (SF Pro on Apple), `ui-monospace` for mono (SF Mono on Apple). New runtime deps: `fastapi`, `uvicorn[standard]`, `jinja2`. No frontend build step.
 
 **Spec reference:** `docs/superpowers/specs/2026-05-28-brain-insights-frontend-design.md` (full design spec + tokens + page layouts). Mockups: `frontend-design/mockups/{dashboard,sources,source-detail}.html`. Aesthetic direction: "Brain Telescope" — dark refined instrument panel.
 
@@ -884,7 +884,8 @@ def test_dashboard_renders_hero_value(client: TestClient, pg_url: str) -> None:
     assert res.status_code == 200
     assert "hero-value" in res.text
     # The hero must contain a number ≥ 1 since we just inserted a decision.
-    assert "Fraunces" in res.text  # font link present
+    # No Google Fonts CDN in v2 — verify hero-value rendered with system-ui.
+    assert "hero-value" in res.text
 
 
 def test_sources_lists_recently_inserted(client: TestClient, pg_url: str) -> None:

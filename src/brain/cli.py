@@ -1198,5 +1198,22 @@ def staleness_diff(ctx: click.Context, since_ref: str, repo_cwd: str | None) -> 
 main.add_command(_hook_group)
 
 
+@main.command()
+@click.option("--host", default="127.0.0.1", help="Host to bind (use 0.0.0.0 for LAN access — no auth!)")
+@click.option("--port", default=8765, type=int)
+@click.option("--reload", is_flag=True, help="Dev mode: auto-reload templates")
+@click.pass_context
+def serve(ctx: click.Context, host: str, port: int, reload: bool) -> None:
+    """Launch Brain Telescope — local web frontend at http://<host>:<port> (v0.11.0)."""
+    import uvicorn
+
+    from brain.web.app import create_app
+
+    cfg = ctx.obj["config"]
+    app = create_app(db_url=cfg.db_url)
+    click.echo(f"Telescope live at http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port, reload=reload)
+
+
 if __name__ == "__main__":
     main()

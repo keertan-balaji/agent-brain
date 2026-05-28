@@ -60,3 +60,52 @@ def test_bundle_selection_empty_when_no_sources(pg_url: str) -> None:
     assert sel.failures == []
     assert sel.subtasks_open == []
     assert sel.recent_events == []
+
+
+def test_gather_picks_up_staleness_detected_event(pg_url: str) -> None:
+    """gather_bundle_selection pulls the most recent staleness_detected event payload
+    for the given session into selection.stale_sources."""
+    import json as _json
+
+    from sqlalchemy import text as _text
+
+    from brain.content_hash import sha256_bytes
+    from brain.db import get_engine, session_scope
+
+    engine = get_engine(pg_url)
+    # Seed: a session, a sources row, a staleness_detected session_event.
+    with session_scope(engine) as s:
+        sid = s.execute(
+            _text(
+                "INSERT INTO sessions(agent, started_at, cc_session_id, cwd) "
+                "VALUES ('claude-code', NOW(), 'cc-bundle-stale', '/tmp/r') RETURNING id"
+            )
+        ).scalar()
+        h = sha256_bytes("about /tmp/foo.py")
+        src_id = s.execute(
+            _text(
+                "INSERT INTO sources(kind, content, content_hash, status) "
+                "VALUES ('decision', 'about /tmp/foo.py', :h, 'active') RETURNING id"
+            ),
+            {"h": h},
+        ).scalar()
+        payload = {
+            "stale_count": 1,
+            "scanned_sources": 5,
+            "scanned_files": 1,
+            "stale_sources": [
+                {"source_id": int(src_id), "kind": "decision", "path": "/tmp/foo.py", "status": "changed"},
+            ],
+        }
+        s.execute(
+            _text(
+                "INSERT INTO session_events(session_id, event_kind, payload) "
+                "VALUES (:sid, 'staleness_detected', CAST(:p AS jsonb))"
+            ),
+            {"sid": int(sid), "p": _json.dumps(payload)},
+        )
+
+    sel = gather_bundle_selection(engine, session_id=int(sid), cwd="/tmp/r")
+    assert len(sel.stale_sources) == 1
+    assert sel.stale_sources[0]["source_id"] == int(src_id)
+    assert sel.stale_sources[0]["status"] == "changed"

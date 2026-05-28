@@ -28,6 +28,7 @@ class BundleSelection:
     failures: list[dict[str, Any]] = field(default_factory=list)
     subtasks_open: list[dict[str, Any]] = field(default_factory=list)
     recent_events: list[dict[str, Any]] = field(default_factory=list)
+    stale_sources: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _head(content: str, max_chars: int = 200) -> str:
@@ -105,4 +106,19 @@ def gather_bundle_selection(
                 {"sid": session_id, "n": limit_per_kind},
             ).fetchall()
         ]
+
+    # v0.9.0: pull the latest staleness_detected event for this session into the
+    # bundle so the next session sees what's potentially stale.
+    with session_scope(engine) as s:
+        row = s.execute(
+            text(
+                "SELECT payload FROM session_events "
+                "WHERE session_id = :sid AND event_kind = 'staleness_detected' "
+                "ORDER BY occurred_at DESC LIMIT 1"
+            ),
+            {"sid": session_id},
+        ).first()
+        if row and row.payload:
+            sel.stale_sources = list(row.payload.get("stale_sources") or [])[:limit_per_kind]
+
     return sel

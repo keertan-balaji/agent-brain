@@ -58,6 +58,7 @@ def render_bundle(
             "failures": selection.failures,
             "subtasks_open": selection.subtasks_open,
             "recent_events": selection.recent_events,
+            "stale_sources": selection.stale_sources,
         },
     }
 
@@ -76,6 +77,13 @@ def render_bundle(
         (
             "Open subtasks",
             [f"({t['subtask_id']}) {t['title']}" for t in selection.subtasks_open],
+        ),
+        (
+            "Potentially stale sources (file changed since capture)",
+            [
+                f"[id={s['source_id']}] kind={s['kind']} status={s['status']} path={s['path']}"
+                for s in selection.stale_sources
+            ],
         ),
         (
             "Recent activity",

@@ -1207,12 +1207,14 @@ def serve(ctx: click.Context, host: str, port: int, reload: bool) -> None:
     """Launch Brain Telescope — local web frontend at http://<host>:<port> (v0.11.0)."""
     import uvicorn
 
-    from brain.web.app import create_app
-
-    cfg = ctx.obj["config"]
-    app = create_app(db_url=cfg.db_url)
     click.echo(f"Telescope live at http://{host}:{port}")
-    uvicorn.run(app, host=host, port=port, reload=reload)
+    uvicorn.run(
+        "brain.web.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+    )
 
 
 if __name__ == "__main__":

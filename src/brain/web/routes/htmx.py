@@ -8,5 +8,5 @@ router = APIRouter(prefix="/_htmx")
 
 
 @router.get("/health")
-def htmx_health() -> dict:
+def htmx_health() -> dict[str, bool]:
     return {"ok": True}

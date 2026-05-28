@@ -18,11 +18,14 @@ from brain.hooks.bundle import gather_bundle_selection
 from brain.hooks.transcript_scan import scan_for_failures
 from brain.hooks.contracts import (
     PreCompactInput,
+    PreToolUseInput,
     SessionEndInput,
     SessionStartInput,
     StopInput,
     UserPromptSubmitInput,
 )
+from brain.hooks.recall_inject import _extract_topic_from_tool
+from brain.read import recall as _recall_fn
 from brain.hooks.events import record_event
 from brain.hooks.render import render_bundle
 from brain.hooks.session import end_session, start_session
@@ -60,6 +63,16 @@ def _emit_noop() -> None:
     # additionalContext. Emit a minimal valid envelope so the harness schema
     # validator passes.
     click.echo("{}")
+
+
+def _emit_pre_tool_use_output(additional_context: str) -> None:
+    payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "additionalContext": additional_context,
+        }
+    }
+    click.echo(json.dumps(payload))
 
 
 @hook.command("session-start")
@@ -312,3 +325,34 @@ def pre_compact_cmd(ctx: click.Context) -> None:
         "failures, and open subtasks. The compactor may safely shorten chat "
         "scrollback aggressively — durable knowledge is in the brain."
     )
+
+
+@hook.command("pre-tool-use")
+@click.pass_context
+def pre_tool_use_cmd(ctx: click.Context) -> None:
+    """Inject brain recall hits as additionalContext before substantive tools fire (v0.10.1)."""
+    raw = _read_stdin_json()
+    inp = PreToolUseInput.model_validate(raw)
+    engine = ctx.obj["engine"]
+
+    topic = _extract_topic_from_tool(inp.tool_name, inp.tool_input)
+    if not topic:
+        _emit_pre_tool_use_output("")
+        return
+
+    try:
+        # FTS-only is the right default — fast (~4ms), no embedder load tax.
+        hits = _recall_fn(engine, topic, k=3)
+    except Exception:  # noqa: BLE001 — hook must be non-fatal
+        _emit_pre_tool_use_output("")
+        return
+
+    if not hits:
+        _emit_pre_tool_use_output("")
+        return
+
+    lines = [f"# Brain recall for: {topic}"]
+    for h in hits:
+        head = (h.content or "")[:200].replace("\n", " ")
+        lines.append(f"- [id={h.id}] kind={h.kind}: {head}")
+    _emit_pre_tool_use_output("\n".join(lines))

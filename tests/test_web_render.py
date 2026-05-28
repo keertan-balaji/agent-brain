@@ -18,6 +18,7 @@ def client(pg_url: str) -> TestClient:
 
 
 def test_dashboard_renders_hero_value(client: TestClient, pg_url: str) -> None:
+    import re
     engine = get_engine(pg_url)
     h = sha256_bytes("test-decision")
     with session_scope(engine) as s:
@@ -30,10 +31,9 @@ def test_dashboard_renders_hero_value(client: TestClient, pg_url: str) -> None:
         )
     res = client.get("/")
     assert res.status_code == 200
-    assert "hero-value" in res.text
-    # The hero must contain a number >= 1 since we just inserted a decision.
-    # v3: hero-value class lives inside a Tailwind-themed page; assert the class survives template render.
-    assert "hero-value" in res.text
+    m = re.search(r'class="[^"]*hero-value[^"]*"[^>]*>\s*(\d+)', res.text)
+    assert m is not None, "hero-value element with integer content not found"
+    assert int(m.group(1)) >= 1, f"expected hero >= 1 after inserting a decision, got {m.group(1)}"
 
 
 def test_sources_lists_recently_inserted(client: TestClient, pg_url: str) -> None:
@@ -72,3 +72,16 @@ def test_source_detail_renders_content(client: TestClient, pg_url: str) -> None:
 def test_source_detail_404_for_missing(client: TestClient) -> None:
     res = client.get("/sources/999999")
     assert res.status_code == 404
+
+
+def test_dashboard_topbar_renders_page_title(client: TestClient) -> None:
+    res = client.get("/")
+    assert res.status_code == 200
+    # Dashboard's {% block page_title %}Dashboard{% endblock %} must reach the topbar.
+    assert "Dashboard" in res.text
+
+
+def test_sources_topbar_renders_page_title(client: TestClient) -> None:
+    res = client.get("/sources")
+    assert res.status_code == 200
+    assert "Sources" in res.text

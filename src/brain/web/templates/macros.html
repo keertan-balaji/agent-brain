@@ -1,0 +1,12 @@
+{% macro sparkline_path(values, width=80, height=28) -%}
+  {%- set maxv = (values | max) or 1 -%}
+  {%- set n = (values | length) -%}
+  {%- set step = width / ((n - 1) if n > 1 else 1) -%}
+  {%- set pts = [] -%}
+  {%- for v in values -%}
+    {%- set x = loop.index0 * step -%}
+    {%- set y = height - (v / maxv * height) -%}
+    {%- set _ = pts.append("%.1f,%.1f" % (x, y)) -%}
+  {%- endfor -%}
+  M{{ pts | join(' L') }}
+{%- endmacro %}

@@ -1,1 +1,127 @@
-<!DOCTYPE html><html><body><div class="detail-content">{{ source.content }}</div></body></html>
+{% extends "base.html" %}
+
+{% block title %}Source #{{ source.id }} — Agent Brain{% endblock %}
+
+{% block page_title %}Source #{{ source.id }}{% endblock %}
+
+{% block topbar_meta %}
+  <div class="flex items-center gap-2">
+    <span class="px-2 py-0.5 border border-surface-container-highest text-on-surface-variant font-label-sm text-label-sm rounded uppercase">{{ source.kind }}</span>
+    <span class="px-2 py-0.5 border border-surface-container-highest text-on-surface-variant font-label-sm text-label-sm rounded uppercase">#{{ source.id }}</span>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="flex h-full overflow-hidden">
+
+  <!-- Main Content Canvas -->
+  <div class="flex-1 flex flex-col overflow-y-auto p-gutter gap-gutter min-w-0">
+
+    <!-- Secondary Action Bar -->
+    <div class="h-12 shrink-0 border border-surface-container-highest bg-surface-container-low rounded flex items-center justify-between px-4">
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-outline">description</span>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 bg-primary-container/10 border border-primary-container/30 text-primary font-label-sm text-label-sm rounded uppercase">{{ source.kind }}</span>
+          {% if source.uri %}
+          <span class="font-label-md text-label-md text-on-surface-variant truncate max-w-xs" title="{{ source.uri }}">{{ source.uri }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="#" class="h-8 px-3 rounded flex items-center gap-2 border border-surface-container-highest text-on-surface hover:border-outline hover:bg-surface-container font-label-md text-label-md transition-colors">
+          <span class="material-symbols-outlined text-[16px]">block</span>
+          Invalidate
+        </a>
+        <a href="#" class="h-8 px-3 rounded flex items-center gap-2 border border-surface-container-highest text-on-surface hover:border-outline hover:bg-surface-container font-label-md text-label-md transition-colors">
+          <span class="material-symbols-outlined text-[16px]">upgrade</span>
+          Revise from diff
+        </a>
+        <a href="/recall#{{ source.id }}" class="h-8 px-3 rounded flex items-center gap-2 border border-outline-variant text-primary bg-primary-container/10 hover:bg-primary-container/20 font-label-md text-label-md transition-colors">
+          <span class="material-symbols-outlined text-[16px]">history</span>
+          Open in recall
+        </a>
+      </div>
+    </div>
+
+    <!-- Content Panel -->
+    <div class="bg-surface-container-low border border-surface-container-highest rounded overflow-hidden">
+      <div class="px-gutter py-3 border-b border-surface-container-highest bg-surface-container flex items-center gap-2">
+        <span class="material-symbols-outlined text-on-surface-variant text-[16px]">article</span>
+        <span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">Content</span>
+      </div>
+      <div class="p-4">
+        <pre class="bg-surface-container border border-surface-container-highest rounded p-4 text-on-surface font-body-md text-body-md whitespace-pre-wrap overflow-x-auto">{{ source.content }}</pre>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Metadata Sidebar (Right Panel) -->
+  <aside class="w-80 shrink-0 bg-surface-container-low border-l border-surface-container-highest flex flex-col overflow-y-auto">
+
+    <!-- Metadata Properties Section -->
+    <div class="p-4 border-b border-surface-container-highest">
+      <h3 class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-4 flex items-center gap-2">
+        <span class="material-symbols-outlined text-[14px]">info</span>
+        Metadata Properties
+      </h3>
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">Kind</span>
+          <span class="text-on-surface bg-surface-container px-2 py-0.5 rounded border border-surface-container-highest uppercase">{{ source.kind }}</span>
+        </div>
+        {% if source.uri %}
+        <div class="flex items-start justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2 gap-2">
+          <span class="text-on-surface-variant shrink-0">URI</span>
+          <span class="text-primary truncate max-w-[160px] text-right" title="{{ source.uri }}">{{ source.uri }}</span>
+        </div>
+        {% endif %}
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">ID</span>
+          <span class="text-on-surface font-bold">#{{ source.id }}</span>
+        </div>
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">Generation Depth</span>
+          <span class="text-on-surface">L{{ source.generation_depth }}</span>
+        </div>
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">Provenance</span>
+          <span class="text-on-surface uppercase text-[10px] px-2 py-0.5 border border-surface-container-highest rounded">{{ source.provenance_kind }}</span>
+        </div>
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">Created</span>
+          <span class="text-on-surface">{{ source.created_at.strftime('%Y-%m-%d %H:%M') if source.created_at else '—' }}</span>
+        </div>
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">Updated</span>
+          <span class="text-on-surface">{{ source.updated_at.strftime('%Y-%m-%d %H:%M') if source.updated_at else '—' }}</span>
+        </div>
+        <div class="flex items-center justify-between font-label-md text-label-md border-b border-surface-container-highest pb-2">
+          <span class="text-on-surface-variant">Valid From</span>
+          <span class="text-on-surface">{{ source.t_valid_from.strftime('%Y-%m-%d') if source.t_valid_from else '—' }}</span>
+        </div>
+        <div class="flex items-center justify-between font-label-md text-label-md">
+          <span class="text-on-surface-variant">Valid To</span>
+          <span class="{% if source.t_valid_to %}text-error{% else %}text-primary{% endif %}">
+            {{ source.t_valid_to.strftime('%Y-%m-%d') if source.t_valid_to else 'Active' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Provenance Meta Section -->
+    {% if source.provenance_meta %}
+    <div class="p-4">
+      <h3 class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-3 flex items-center gap-2">
+        <span class="material-symbols-outlined text-[14px]">data_object</span>
+        Provenance Meta
+      </h3>
+      <pre class="bg-surface-container-lowest border border-surface-container-highest rounded p-3 text-on-surface-variant font-label-md text-label-md whitespace-pre-wrap text-[10px] overflow-x-auto">{{ source.provenance_meta | tojson(indent=2) }}</pre>
+    </div>
+    {% endif %}
+
+  </aside>
+
+</div>
+{% endblock %}

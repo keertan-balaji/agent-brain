@@ -1,1 +1,185 @@
-<!DOCTYPE html><html><body><div class="hero-value">0</div></body></html>
+{% extends "base.html" %}
+{% import 'macros.html' as m %}
+
+{% block title %}Dashboard — Agent Brain{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block topbar_meta %}
+  <div class="flex items-center gap-2">
+    <span class="px-2 py-0.5 border border-primary-container/30 text-primary font-label-sm text-label-sm rounded uppercase flex items-center gap-1">
+      <span class="w-1.5 h-1.5 bg-primary-container rounded-full shadow-[0_0_4px_#da0037] animate-pulse"></span>
+      Online
+    </span>
+    <span class="px-2 py-0.5 border border-surface-container-highest text-on-surface-variant font-label-sm text-label-sm rounded uppercase">v0.11.0</span>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="p-gutter grid grid-cols-12 gap-gutter">
+
+  <!-- METRICS ROW -->
+  <div class="col-span-12 grid grid-cols-3 gap-gutter">
+
+    <!-- Total Memory Rows (Hero Card) -->
+    <div class="bg-surface-container-low border border-surface-container-highest p-4 rounded group hover:border-outline transition-colors">
+      <div class="flex justify-between items-start mb-2">
+        <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Total Memory Rows</span>
+        <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">layers</span>
+      </div>
+      <div class="flex items-end gap-3">
+        <div class="hero-value font-headline-lg text-headline-lg text-on-surface leading-none">{{ stats.hero.total | int }}</div>
+        <div class="font-label-sm text-label-sm text-primary flex items-center mb-1">
+          <span class="material-symbols-outlined text-[14px]">arrow_upward</span> +{{ stats.hero.delta_week }}
+        </div>
+      </div>
+      <div class="mt-1 font-label-sm text-label-sm text-on-surface-variant opacity-60">Last capture: {{ stats.hero.last_capture }}</div>
+      <div class="mt-3 h-10">
+        <svg viewBox="0 0 80 28" class="w-full h-full overflow-visible">
+          <path d="{{ m.sparkline_path(stats.capture_cadence.sparkline) }}" stroke="#da0037" stroke-width="1.5" fill="none" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Capture Cadence -->
+    <div class="bg-surface-container-low border border-surface-container-highest p-4 rounded group hover:border-outline transition-colors">
+      <div class="flex justify-between items-start mb-2">
+        <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Capture Cadence (30d)</span>
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-primary-container rounded-full shadow-[0_0_8px_#da0037]"></div>
+          <span class="font-label-sm text-label-sm text-primary uppercase">Active</span>
+        </div>
+      </div>
+      <div class="flex items-end gap-3 mb-3">
+        <div class="font-headline-lg text-headline-lg text-on-surface leading-none">{{ stats.capture_cadence.last_30d_total }}</div>
+        <div class="font-label-sm text-label-sm {% if stats.capture_cadence.delta_vs_prior_30d >= 0 %}text-primary{% else %}text-error{% endif %} mb-1">
+          {% if stats.capture_cadence.delta_vs_prior_30d >= 0 %}+{% endif %}{{ stats.capture_cadence.delta_vs_prior_30d }} vs prior 30d
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% for kind, count in stats.capture_cadence.by_kind.items() %}
+        <div class="px-2 py-0.5 border border-primary-container/20 text-primary text-[10px] rounded uppercase font-label-sm">{{ kind }}: {{ count }}</div>
+        {% else %}
+        <div class="px-2 py-0.5 border border-surface-container-highest text-on-surface-variant text-[10px] rounded uppercase font-label-sm">No captures</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Embedding Coverage -->
+    <div class="bg-surface-container-low border border-surface-container-highest p-4 rounded group hover:border-outline transition-colors">
+      <div class="flex justify-between items-start mb-2">
+        <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Embedding Coverage</span>
+        <span class="material-symbols-outlined text-on-surface-variant">hub</span>
+      </div>
+      <div class="flex items-end gap-3">
+        <div class="font-headline-lg text-headline-lg text-on-surface leading-none">{{ stats.embedding_coverage.percent | round(1) }}%</div>
+        <div class="font-label-sm text-label-sm text-on-surface-variant mb-1">{{ stats.embedding_coverage.embedded }} / {{ stats.embedding_coverage.total }}</div>
+      </div>
+      <div class="mt-6">
+        <div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+          <div class="h-full bg-primary-container transition-all duration-1000" style="width: {{ [stats.embedding_coverage.percent, 100] | min }}%"></div>
+        </div>
+        <div class="mt-2 flex justify-between font-label-sm text-label-sm text-on-surface-variant opacity-50">
+          <span>{{ stats.embedding_coverage.embedded }} embedded</span>
+          <span>{{ stats.embedding_coverage.percent | round(1) }}% coverage</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE + STALENESS ROW -->
+  <div class="col-span-12 grid grid-cols-2 gap-gutter">
+
+    <!-- Compliance Block -->
+    <div class="bg-surface-container-low border border-surface-container-highest rounded overflow-hidden">
+      <div class="px-gutter py-3 border-b border-surface-container-highest flex justify-between items-center bg-surface-container">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-on-surface-variant">verified_user</span>
+          <h2 class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-tight">Compliance</h2>
+        </div>
+        <span class="px-2 py-0.5 font-label-sm text-label-sm rounded uppercase {% if stats.compliance.strict_mode %}bg-primary-container text-white{% else %}border border-surface-container-highest text-on-surface-variant{% endif %}">
+          {% if stats.compliance.strict_mode %}Strict Mode{% else %}Relaxed{% endif %}
+        </span>
+      </div>
+      <div class="p-4 grid grid-cols-2 gap-4">
+        <div>
+          <div class="font-label-sm text-label-sm text-outline uppercase mb-1">Under-captured (30d)</div>
+          <div class="font-headline-md text-headline-md {% if stats.compliance.under_captured_30d > 0 %}text-error{% else %}text-primary{% endif %}">{{ stats.compliance.under_captured_30d }}</div>
+        </div>
+        <div>
+          <div class="font-label-sm text-label-sm text-outline uppercase mb-1">Thin sessions (30d)</div>
+          <div class="font-headline-md text-headline-md {% if stats.compliance.thin_sessions_30d > 0 %}text-on-surface{% else %}text-primary{% endif %}">{{ stats.compliance.thin_sessions_30d }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staleness Block -->
+    <div class="bg-surface-container-low border border-surface-container-highest rounded overflow-hidden">
+      <div class="px-gutter py-3 border-b border-surface-container-highest flex justify-between items-center bg-surface-container">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-on-surface-variant">update</span>
+          <h2 class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-tight">Staleness</h2>
+        </div>
+        <span class="font-label-sm text-label-sm text-on-surface-variant">{{ stats.staleness.scanned }} scanned</span>
+      </div>
+      <div class="p-4 grid grid-cols-3 gap-4">
+        <div>
+          <div class="font-label-sm text-label-sm text-outline uppercase mb-1">Changed</div>
+          <div class="font-headline-md text-headline-md {% if stats.staleness.changed > 0 %}text-error{% else %}text-primary{% endif %}">{{ stats.staleness.changed }}</div>
+        </div>
+        <div>
+          <div class="font-label-sm text-label-sm text-outline uppercase mb-1">Missing</div>
+          <div class="font-headline-md text-headline-md {% if stats.staleness.missing > 0 %}text-error{% else %}text-primary{% endif %}">{{ stats.staleness.missing }}</div>
+        </div>
+        <div>
+          <div class="font-label-sm text-label-sm text-outline uppercase mb-1">Untracked</div>
+          <div class="font-headline-md text-headline-md text-on-surface-variant">{{ stats.staleness.untracked }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAILURES TABLE -->
+  <section class="col-span-12 bg-surface-container-low border border-surface-container-highest rounded overflow-hidden flex flex-col">
+    <div class="px-gutter py-3 border-b border-surface-container-highest flex justify-between items-center bg-surface-container">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-on-surface-variant">error</span>
+        <h2 class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-tight">Failure Memories</h2>
+      </div>
+      <span class="font-label-sm text-label-sm text-on-surface-variant">Top {{ stats.failures | length }} by retry count</span>
+    </div>
+    {% if stats.failures %}
+    <div class="flex-1 overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-surface-container-lowest">
+            <th class="px-4 py-3 font-label-sm text-label-sm text-outline border-b border-surface-container-highest uppercase">ID</th>
+            <th class="px-4 py-3 font-label-sm text-label-sm text-outline border-b border-surface-container-highest uppercase">Target / Problem</th>
+            <th class="px-4 py-3 font-label-sm text-label-sm text-outline border-b border-surface-container-highest uppercase">Approach</th>
+            <th class="px-4 py-3 font-label-sm text-label-sm text-outline border-b border-surface-container-highest uppercase">Retries</th>
+            <th class="px-4 py-3 font-label-sm text-label-sm text-outline border-b border-surface-container-highest uppercase">Last Attempted</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-container-highest">
+          {% for f in stats.failures %}
+          <tr class="hover:bg-surface-container-high transition-colors bg-error-container/5">
+            <td class="px-4 py-3 font-label-sm text-label-sm text-on-surface-variant">#{{ f.id }}</td>
+            <td class="px-4 py-3 font-body-md text-body-md text-on-surface max-w-xs truncate">{{ f.target_problem }}</td>
+            <td class="px-4 py-3 font-body-md text-body-md text-on-surface-variant max-w-xs truncate">{{ f.attempted_approach }}</td>
+            <td class="px-4 py-3"><span class="text-error text-[10px] font-bold">{{ f.retry_count }}×</span></td>
+            <td class="px-4 py-3 font-label-md text-label-md text-on-surface-variant">{{ f.last_attempted_at.strftime('%Y-%m-%d %H:%M') if f.last_attempted_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-8 text-center text-on-surface-variant font-label-md text-label-md opacity-60">
+      <span class="material-symbols-outlined text-[32px] mb-2 block">check_circle</span>
+      No failure memories recorded
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

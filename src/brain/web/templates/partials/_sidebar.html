@@ -1,0 +1,77 @@
+<!-- SIDE NAVIGATION SHELL -->
+<aside class="flex flex-col fixed left-0 top-0 h-full z-50 w-64 bg-surface-container-low border-r border-surface-container-highest">
+  <!-- Brand Header -->
+  <div class="p-gutter h-14 flex items-center gap-3 border-b border-surface-container-highest">
+    <div class="w-8 h-8 bg-primary-container flex items-center justify-center rounded">
+      <span class="material-symbols-outlined text-white text-[20px]" style="font-variation-settings: 'FILL' 1;">psychology</span>
+    </div>
+    <div>
+      <div class="font-headline-sm text-headline-sm text-primary font-bold leading-none">AGENT_BRAIN_V1</div>
+      <div class="font-label-sm text-label-sm text-on-surface-variant opacity-60">OPERATOR_01</div>
+    </div>
+  </div>
+  <!-- Navigation Tabs -->
+  <nav class="flex-1 py-4 overflow-y-auto">
+    <div class="px-3 mb-2 font-label-sm text-label-sm text-outline uppercase tracking-widest opacity-50">Core Interface</div>
+    <ul class="space-y-1">
+      <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all {% if active == 'dashboard' %}text-on-primary bg-primary-container border-l-2 border-primary scale-[0.99]{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest{% endif %}" href="/">
+          <span class="material-symbols-outlined" {% if active == 'dashboard' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>dashboard</span>
+          <span class="font-label-md text-label-md">Dashboard</span>
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all {% if active == 'sources' %}text-on-primary bg-primary-container border-l-2 border-primary scale-[0.99]{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest{% endif %}" href="/sources">
+          <span class="material-symbols-outlined" {% if active == 'sources' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>database</span>
+          <span class="font-label-md text-label-md">Sources</span>
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all {% if active == 'recall' %}text-on-primary bg-primary-container border-l-2 border-primary scale-[0.99]{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest{% endif %}" href="/recall">
+          <span class="material-symbols-outlined" {% if active == 'recall' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>history</span>
+          <span class="font-label-md text-label-md">Recall</span>
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest" href="#">
+          <span class="material-symbols-outlined">folder_open</span>
+          <span class="font-label-md text-label-md">Projects</span>
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest" href="#">
+          <span class="material-symbols-outlined">pulse_alert</span>
+          <span class="font-label-md text-label-md">Health</span>
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest" href="#">
+          <span class="material-symbols-outlined">settings</span>
+          <span class="font-label-md text-label-md">Settings</span>
+        </a>
+      </li>
+    </ul>
+    <div class="px-3 mt-8 mb-2 font-label-sm text-label-sm text-outline uppercase tracking-widest opacity-50">System Info</div>
+    <ul class="space-y-1">
+      <li>
+        <a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest px-4 py-3 transition-all" href="#">
+          <span class="material-symbols-outlined">code</span>
+          <span class="font-label-md text-label-md">System Log</span>
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest px-4 py-3 transition-all" href="#">
+          <span class="material-symbols-outlined">description</span>
+          <span class="font-label-md text-label-md">API Docs</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+  <!-- CTA Footer -->
+  <div class="p-gutter border-t border-surface-container-highest">
+    <button class="w-full bg-primary-container text-white py-3 font-label-md text-label-md rounded flex items-center justify-center gap-2 hover:brightness-110 active:opacity-80 transition-all">
+      <span class="material-symbols-outlined text-[18px]">add</span>
+      NEW_SESSION
+    </button>
+  </div>
+</aside>

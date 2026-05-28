@@ -1,0 +1,31 @@
+<tr class="border-b border-surface-container-highest hover:bg-surface-container-high transition-colors group">
+  <td class="p-3 text-center">
+    <input class="bg-surface border border-surface-container-highest text-primary-container rounded-sm w-3 h-3" type="checkbox"/>
+  </td>
+  <td class="p-3">
+    <span class="flex items-center gap-1">
+      <span class="material-symbols-outlined text-sm text-on-surface-variant">description</span>
+      <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">{{ row.kind }}</span>
+    </span>
+  </td>
+  <td class="p-3 text-on-surface-variant truncate max-w-xs group-hover:text-on-surface transition-colors font-body-md text-body-md">
+    {% if row.uri %}<span class="text-primary font-label-sm text-label-sm">{{ row.uri }}</span> — {% endif %}{{ row.content_preview }}
+  </td>
+  <td class="p-3">
+    {% if row.embedded %}
+      <span class="font-label-sm text-label-sm text-primary flex items-center gap-1">
+        <span class="material-symbols-outlined text-[10px]">check_circle</span> Embedded
+      </span>
+    {% else %}
+      <span class="font-label-sm text-label-sm text-on-surface-variant opacity-50 flex items-center gap-1">
+        <span class="material-symbols-outlined text-[10px]">radio_button_unchecked</span> Pending
+      </span>
+    {% endif %}
+  </td>
+  <td class="p-3 text-on-surface-variant font-label-sm text-label-sm">{{ row.created_at.strftime('%Y-%m-%d %H:%M') if row.created_at else '—' }}</td>
+  <td class="p-3 text-right">
+    <a href="/sources/{{ row.id }}" class="text-on-surface-variant hover:text-primary transition-colors">
+      <span class="material-symbols-outlined text-sm">open_in_new</span>
+    </a>
+  </td>
+</tr>

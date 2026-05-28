@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>{% block title %}Agent Brain{% endblock %}</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Geist:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "background": "#131313",
+                        "on-surface-variant": "#e6bcbc",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-secondary": "#303030",
+                        "surface-container-highest": "#353534",
+                        "secondary-fixed-dim": "#c8c6c6",
+                        "primary-container": "#da0037",
+                        "on-background": "#e5e2e1",
+                        "surface-bright": "#393939",
+                        "error": "#ffb4ab",
+                        "surface-variant": "#353534",
+                        "secondary-fixed": "#e4e2e2",
+                        "error-container": "#93000a",
+                        "primary-fixed": "#ffdad9",
+                        "on-tertiary-container": "#f0f0f0",
+                        "tertiary": "#c6c6c7",
+                        "primary-fixed-dim": "#ffb3b3",
+                        "tertiary-container": "#6c6d6d",
+                        "on-surface": "#e5e2e1",
+                        "surface": "#131313",
+                        "on-primary-container": "#ffebea",
+                        "secondary-container": "#474747",
+                        "on-error-container": "#ffdad6",
+                        "inverse-surface": "#e5e2e1",
+                        "surface-container": "#201f1f",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "secondary": "#c8c6c6",
+                        "outline-variant": "#5d3f3f",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-dim": "#131313",
+                        "on-primary-fixed": "#400009",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary-fixed-variant": "#474747",
+                        "inverse-primary": "#bf002f",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-secondary-container": "#b6b5b4",
+                        "on-primary": "#680015",
+                        "surface-tint": "#ffb3b3",
+                        "on-error": "#690005",
+                        "inverse-on-surface": "#313030",
+                        "on-tertiary": "#2f3131",
+                        "surface-container-low": "#1c1b1b",
+                        "on-primary-fixed-variant": "#920022",
+                        "primary": "#ffb3b3",
+                        "outline": "#ad8887"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter": "12px",
+                        "container-max": "1440px",
+                        "margin": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["JetBrains Mono"],
+                        "headline-sm": ["JetBrains Mono"],
+                        "headline-md": ["JetBrains Mono"],
+                        "body-lg": ["Geist"],
+                        "body-sm": ["Geist"],
+                        "body-md": ["Geist"],
+                        "headline-lg": ["JetBrains Mono"],
+                        "label-sm": ["JetBrains Mono"],
+                        "label-md": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", {"lineHeight": "30px", "fontWeight": "700"}],
+                        "headline-sm": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["10px", {"lineHeight": "12px", "fontWeight": "500"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+<link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-white overflow-hidden">
+{% include 'partials/_sidebar.html' %}
+<main class="pl-64 flex flex-col h-screen relative">
+  <div class="crimson-scanline absolute inset-0 z-0 opacity-20"></div>
+  {% include 'partials/_topbar.html' %}
+  <div class="flex-1 overflow-y-auto relative z-10">
+    {% block content %}{% endblock %}
+  </div>
+  <footer class="h-8 bg-surface-container border-t border-surface-container-highest px-gutter flex items-center justify-between relative z-10">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-2">
+        <span class="w-1.5 h-1.5 bg-primary-container rounded-full shadow-[0_0_4px_#da0037]"></span>
+        <span class="font-label-sm text-label-sm text-on-surface uppercase">System Nominal</span>
+      </div>
+      <div class="flex items-center gap-2 text-on-surface-variant opacity-50">
+        <span class="material-symbols-outlined text-[14px]">public</span>
+        <span class="font-label-sm text-label-sm uppercase">Global Gateway: LOCAL</span>
+      </div>
+      <div class="flex items-center gap-2 text-on-surface-variant opacity-50">
+        <span class="material-symbols-outlined text-[14px]">schedule</span>
+        <span class="font-label-sm text-label-sm uppercase" id="system-time">--:--:-- UTC</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 font-label-sm text-label-sm text-outline">
+      <span>ENCODING: UTF-8</span>
+      <span class="text-primary">AGENT_BRAIN_v0.11.0</span>
+    </div>
+  </footer>
+</main>
+<script>
+  function updateTime() {
+    const timeEl = document.getElementById('system-time');
+    if (timeEl) {
+      const now = new Date();
+      timeEl.textContent = now.toISOString().split('T')[1].split('.')[0] + ' UTC';
+    }
+  }
+  updateTime();
+  setInterval(updateTime, 1000);
+</script>
+</body>
+</html>

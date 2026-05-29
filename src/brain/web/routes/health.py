@@ -17,5 +17,10 @@ def health_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "health.html",
-        {"stats": stats, "active": "health"},
+        {
+            "stats": stats,
+            "active": "health",
+            "last_capture_fmt": stats.last_capture_at.strftime("%Y-%m-%d %H:%M UTC") if stats.last_capture_at else "—",
+            "last_session_fmt": stats.last_session_event_at.strftime("%Y-%m-%d %H:%M UTC") if stats.last_session_event_at else "—",
+        },
     )

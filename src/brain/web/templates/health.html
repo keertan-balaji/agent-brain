@@ -102,9 +102,9 @@
     <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-2">Activity</div>
     <div class="font-body-md text-body-md text-on-surface-variant">
       Last capture:
-      <span class="font-label-md text-on-surface">{{ stats.last_capture_at or "—" }}</span> ·
+      <span class="font-label-md text-on-surface">{{ last_capture_fmt }}</span> ·
       Last session event:
-      <span class="font-label-md text-on-surface">{{ stats.last_session_event_at or "—" }}</span>
+      <span class="font-label-md text-on-surface">{{ last_session_fmt }}</span>
     </div>
   </section>
 

@@ -23,6 +23,7 @@ def test_health_stats_returns_model_on_empty_brain(pg_url: str) -> None:
     stats = health_stats(engine)
     assert isinstance(stats, HealthStats)
     assert stats.sources_total >= 0
+    # pool.size() returns the configured pool_size (default 5 for QueuePool), not live connections.
     assert stats.pool.size >= 1
     assert stats.embedding.percent >= 0
 

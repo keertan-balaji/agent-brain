@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from brain.compliance import under_captured_sessions, is_strict_mode
 from brain.db import session_scope
@@ -369,6 +370,14 @@ class HealthStats(BaseModel):
     last_session_event_at: datetime | None
 
 
+def _pool_stat(pool: Any, attr: str) -> int:
+    """Read a pool stat that may be a method (QueuePool) or an int attribute (SingletonThreadPool)."""
+    v = getattr(pool, attr, None)
+    if v is None:
+        return 0
+    return int(v() if callable(v) else v)
+
+
 def health_stats(engine: Engine) -> HealthStats:
     """Aggregate observability snapshot. Reuses dashboard math where possible."""
     with session_scope(engine) as s:
@@ -386,7 +395,7 @@ def health_stats(engine: Engine) -> HealthStats:
         captures_1h = s.execute(
             text(
                 "SELECT COUNT(*) FROM sources "
-                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL AND t_valid_to IS NULL "
                 "  AND created_at >= NOW() - INTERVAL '1 hour'"
             ),
             {"k": _SUBSTANTIVE_KINDS},
@@ -394,7 +403,7 @@ def health_stats(engine: Engine) -> HealthStats:
         captures_24h = s.execute(
             text(
                 "SELECT COUNT(*) FROM sources "
-                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL AND t_valid_to IS NULL "
                 "  AND created_at >= NOW() - INTERVAL '24 hours'"
             ),
             {"k": _SUBSTANTIVE_KINDS},
@@ -402,7 +411,7 @@ def health_stats(engine: Engine) -> HealthStats:
         captures_7d = s.execute(
             text(
                 "SELECT COUNT(*) FROM sources "
-                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL AND t_valid_to IS NULL "
                 "  AND created_at >= NOW() - INTERVAL '7 days'"
             ),
             {"k": _SUBSTANTIVE_KINDS},
@@ -410,7 +419,7 @@ def health_stats(engine: Engine) -> HealthStats:
         last_cap_at = s.execute(
             text(
                 "SELECT created_at FROM sources "
-                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL AND t_valid_to IS NULL "
                 "ORDER BY created_at DESC LIMIT 1"
             ),
             {"k": _SUBSTANTIVE_KINDS},
@@ -448,8 +457,8 @@ def health_stats(engine: Engine) -> HealthStats:
             p50 = float(latency_rows.p50 or 0)
             p95 = float(latency_rows.p95 or 0)
             n_samples = int(latency_rows.n or 0)
-        except Exception:
-            # Column might be named differently in older schemas — degrade silently.
+        except (OperationalError, ProgrammingError):
+            # retrieval_log column may be named differently in older schemas
             p50, p95, n_samples = 0.0, 0.0, 0
 
     # Staleness (reuses scan_db).
@@ -461,10 +470,10 @@ def health_stats(engine: Engine) -> HealthStats:
     # Pool stats from SQLAlchemy.
     pool = engine.pool
     pool_stats = PoolStats(
-        size=int(getattr(pool, "size", lambda: 0)()),
-        checked_in=int(getattr(pool, "checkedin", lambda: 0)()),
-        checked_out=int(getattr(pool, "checkedout", lambda: 0)()),
-        overflow=int(getattr(pool, "overflow", lambda: 0)()),
+        size=_pool_stat(pool, "size"),
+        checked_in=_pool_stat(pool, "checkedin"),
+        checked_out=_pool_stat(pool, "checkedout"),
+        overflow=max(0, _pool_stat(pool, "overflow")),  # clamp negative idle-overflow
     )
 
     return HealthStats(

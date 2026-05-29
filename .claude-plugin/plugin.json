@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.1 completes the Brain Telescope sidebar: /recall (FTS console), /health (observability), and /knowledge (Cytoscape graph). FastAPI + HTMX + Alpine + Cytoscape, no node toolchain.",
-  "version": "0.11.1",
+  "description": "Postgres-backed second brain for AI agents — v0.12.0 Phase 3b deep recall: multi-query expansion + Self-Query filters + CRAG verification via brain recall --deep. Telescope web frontend (FastAPI + HTMX + Alpine + Cytoscape) unchanged. No node toolchain.",
+  "version": "0.12.0",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

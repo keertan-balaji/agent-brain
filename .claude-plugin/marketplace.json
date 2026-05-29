@@ -5,8 +5,8 @@
     "email": "keertan@syntheticsciences.ai"
   },
   "metadata": {
-    "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.1 adds /recall, /health, and /knowledge pages to the Brain Telescope.",
-    "version": "0.11.1"
+    "description": "Postgres-backed second brain for AI agents — v0.12.0 Phase 3b deep recall: multi-query expansion + Self-Query filters + CRAG verification via brain recall --deep. Eval set extended to 54 questions with --with-deep arm in run_ab.py.",
+    "version": "0.12.0"
   },
   "plugins": [
     {
@@ -15,8 +15,8 @@
         "source": "url",
         "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "v0.11.1: Brain Telescope full sidebar — /recall (FTS console), /health (observability), /knowledge (Cytoscape graph) added to v0.11.0 dashboard + sources. FastAPI + HTMX + Alpine + Cytoscape. Plus v0.10.1 PreToolUse auto-recall + v0.10.0 revise --from-diff + v0.9.0 staleness + v0.8.5 noise filters + v0.8.4 auto-embed + v0.8.3 hybrid recall. hit@5 = 25% → 100% on 16-Q eval. 19 brain-* + 5 obsidian-* skills.",
-      "version": "0.11.1",
+      "description": "v0.12.0: Phase 3b deep recall — brain recall --deep adds multi-query expansion (MultiQueryExpander) + Self-Query filters (QueryFilterExtractor) + CRAG verification (CragVerifier). Eval set extended from 20 to 54 questions; --with-deep arm in run_ab.py. Plus v0.11.1 Brain Telescope + v0.10.1 PreToolUse auto-recall + v0.8.3 hybrid recall. hit@5 = 34% (FTS) → 80% (hybrid) on 46-Q eval. 19 brain-* + 5 obsidian-* skills.",
+      "version": "0.12.0",
       "strict": true
     }
   ]

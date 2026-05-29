@@ -319,6 +319,14 @@ Blocklisted tools (`TodoWrite`, `Skill`, `AskUserQuestion`, `ToolSearch`, `TaskS
 git pull && /reload-plugins
 ```
 
+## v0.12.0 — Phase 3b deep recall (multi-query + Self-Query + CRAG)
+
+`brain recall --deep` adds a second retrieval tier on top of the Phase 2 FTS + BGE-M3 + RRF + reranker stack. Three new GroundedHelper layers compose around `recall()`: `QueryFilterExtractor` (Self-Query — extracts kind/temporal filters from the query), `MultiQueryExpander` (generates 3–5 lexically diverse variants, RRF-fused), and `CragVerifier` (3-way keep/merge/discard per candidate). All three helpers are agent-driven: `brain.prepare()` builds the prompt; the calling agent synthesizes JSON; `brain.finalize()` validates and caches. No embedded LLM client.
+
+- New CLI flag: `brain recall --deep` (~3 s p99 on warm cache vs ~500 ms Fast tier; graceful degradation to Fast-tier quality on cold cache)
+- Eval set extended from 20 to 54 questions (vocab-match, paraphrase, synonym, 8 controls); `--with-deep` arm added to `eval/run_ab.py`
+- Ops doc: `docs/phase-3b-retrieval-hardening.md`
+
 ## v0.11.1 — Brain Telescope (insights frontend, full sidebar)
 
 A local web frontend for the agent-brain — a dark Crimson Matrix instrument panel. Built with FastAPI + Jinja + HTMX + Alpine + Cytoscape; no node toolchain.

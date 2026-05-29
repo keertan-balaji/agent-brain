@@ -1143,7 +1143,7 @@ The build ships in 6 phases (Phase 3 split into 3a/3b/3c per review). Each phase
 | **Phase 3a-2 — Failure capture + sanitization** | ✅ shipped | v0.6.0 | `brain-failure` skill + Stop-hook auto-flag + ANSI/density/origin-quoting |
 | **Phase 3a-3 — Obsidian file watcher** | ❌ pending | — | Originally planned; never implemented. Vault→DB sync still manual |
 | **Phase 3a-4 — Compliance subsystem** | ✅ shipped | v0.7.0 | `under_captured`/`thin_session`/`strict_mode`/`brain-compliance` |
-| **Phase 3b — Retrieval hardening (Deep tier)** | ⚠️ partial | — | See per-bullet annotations below |
+| **Phase 3b — Retrieval hardening (Deep tier)** | ✅ shipped | v0.12.0 | multi-query + Self-Query + CRAG + `recall --deep` |
 | **Phase 3c — Multi-vector retrieval** | ❌ pending | — | BGE-M3 sparse + ColBERT + late chunking + HyDE all unshipped |
 | **Phase 4 — Power features + multi-platform** | ❌ pending | — | None of the bullets shipped |
 
@@ -1201,13 +1201,13 @@ Schema scope: `sources` (with `project_id`, `status`, `provenance_kind`, `genera
 - [x] `brain-session-log`, `brain-session-resume`, `brain-handoff` skills (3a-1 v0.5.0)
 - [x] Sanitization minimum (ANSI stripping + instruction-density flagging + origin-aware retrieval quoting) (3a-2 v0.6.0)
 
-### Phase 3b — Retrieval hardening (Deep tier) — ⚠️ PARTIAL
+### Phase 3b — Retrieval hardening (Deep tier) — ✅ SHIPPED in v0.12.0
 
-- [ ] **PENDING** — Multi-query fusion (3–5 LLM-generated query variants, RRF-fused)
-- [ ] **PENDING** — Self-Query (LLM extracts structured filters from query text)
-- [ ] **PENDING** — CRAG verification gate (conditional per §Retrieval hardening trigger conditions)
-- [ ] **PENDING** — `brain-recall --deep` tier integration
-- [x] Eval harness: 20-question hand-curated set against this repo's content shipped in v0.8.3 (see `eval/questions.yaml` + `eval/run_ab.py`). **PENDING** — extension to 50–100 questions + LongMemEval + MemoryAgentBench cross-comparison.
+- [x] **SHIPPED v0.12.0** — Multi-query fusion (3–5 LLM-generated query variants, RRF-fused) — `MultiQueryExpander` GroundedHelper
+- [x] **SHIPPED v0.12.0** — Self-Query (LLM extracts structured filters from query text) — `QueryFilterExtractor` GroundedHelper; since/until applied post-hoc
+- [x] **SHIPPED v0.12.0** — CRAG verification gate (3-way keep/merge/discard verdict) — `CragVerifier` GroundedHelper
+- [x] **SHIPPED v0.12.0** — `brain recall --deep` tier integration — `recall_deep()` composition in `src/brain/retrieval/deep.py`
+- [x] Eval harness: 20-question hand-curated set against this repo's content shipped in v0.8.3 (see `eval/questions.yaml` + `eval/run_ab.py`). Extended to 54-question set in v0.12.0 (Phase 3b) + `--with-deep` arm in `run_ab.py`. **PENDING** — LongMemEval + MemoryAgentBench cross-comparison (Phase 4).
 
 ### Phase 3c — Multi-vector retrieval + agent-memory chunking — ❌ PENDING
 

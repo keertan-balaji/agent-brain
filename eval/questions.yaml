@@ -123,3 +123,192 @@ questions:
     expected_source_ids: []
     tags: [control]
     control: true
+
+  # === decision 39: Option G retrieval stack for 4GB GPUs ===
+  - id: q17
+    query: "which reranker model should I use on a low VRAM GPU"
+    expected_source_ids: [39]
+    tags: [paraphrase]
+
+  - id: q18
+    query: "bge-reranker-v2-m3 auto-fallback for under 6GB GPU"
+    expected_source_ids: [39]
+    tags: [vocab_match]
+
+  - id: q19
+    query: "mxbai rerank large vs bge reranker on RTX 3050"
+    expected_source_ids: [39]
+    tags: [synonym]
+
+  # === decision 45: auto-embed on brain write ===
+  - id: q20
+    query: "brain write immediately embeds substantive captures"
+    expected_source_ids: [45]
+    tags: [vocab_match]
+
+  - id: q21
+    query: "new captures should be findable via semantic search right away"
+    expected_source_ids: [45]
+    tags: [paraphrase]
+
+  # === decision 12: wire hybrid recall CLI ===
+  - id: q22
+    query: "brain recall CLI was only running FTS not the full vector pipeline"
+    expected_source_ids: [12]
+    tags: [synonym]
+
+  - id: q23
+    query: "how to opt out of reranker in brain recall command"
+    expected_source_ids: [12]
+    tags: [paraphrase]
+
+  # === decision 14: ingest backfill smoke test ===
+  - id: q24
+    query: "brain ingest backfill finds unembedded sources"
+    expected_source_ids: [14]
+    tags: [vocab_match]
+
+  - id: q25
+    query: "run backfill command to add missing embeddings"
+    expected_source_ids: [14]
+    tags: [paraphrase]
+
+  # === gotcha 82: failure_memories + Stop hook Phase 3a-2 ===
+  - id: q26
+    query: "Stop hook scans transcript for Traceback and upserts failure_memories"
+    expected_source_ids: [82]
+    tags: [vocab_match]
+
+  - id: q27
+    query: "how does the agent brain capture errors that happened during a session"
+    expected_source_ids: [82]
+    tags: [paraphrase]
+
+  - id: q28
+    query: "dedup key for repeated failures retry_count increment"
+    expected_source_ids: [82]
+    tags: [synonym]
+
+  # === gotcha 74: transcript scanner for Stop hook ===
+  - id: q29
+    query: "FailureCandidate triples from transcript scanner Stop hook"
+    expected_source_ids: [74]
+    tags: [vocab_match]
+
+  - id: q30
+    query: "how does brain scan JSONL transcript to detect tool failures"
+    expected_source_ids: [74]
+    tags: [paraphrase]
+
+  # === gotcha 78: tool use rejection by user ===
+  - id: q31
+    query: "user rejected the tool call what should the agent do"
+    expected_source_ids: [78]
+    tags: [paraphrase]
+
+  - id: q32
+    query: "tool use was rejected STOP and wait for user instruction"
+    expected_source_ids: [78]
+    tags: [vocab_match]
+
+  # === gotcha 77: file modified since read ===
+  - id: q33
+    query: "file was modified after reading before writing error"
+    expected_source_ids: [77]
+    tags: [paraphrase]
+
+  - id: q34
+    query: "File has been modified since read tool_use_error"
+    expected_source_ids: [77]
+    tags: [vocab_match]
+
+  # === gotcha 76: string not found in Edit tool ===
+  - id: q35
+    query: "strict_mode test fixture needs to restore prior state"
+    expected_source_ids: [76]
+    tags: [vocab_match]
+
+  - id: q36
+    query: "test that toggles strict mode must reset it afterward"
+    expected_source_ids: [76]
+    tags: [paraphrase]
+
+  # === pattern 7: relax CHECK constraint ===
+  - id: q37
+    query: "session_events event_kind check constraint dropped in migration 013"
+    expected_source_ids: [7]
+    tags: [vocab_match]
+
+  - id: q38
+    query: "avoid migration for every new allowed value in enum column"
+    expected_source_ids: [7]
+    tags: [synonym]
+
+  # === gotcha 8: TRUNCATE deadlock retry ===
+  - id: q39
+    query: "conftest teardown hangs on TRUNCATE because subprocess holds a lock"
+    expected_source_ids: [8]
+    tags: [synonym]
+
+  - id: q40
+    query: "exponential backoff retry on TRUNCATE deadlock in test teardown"
+    expected_source_ids: [8]
+    tags: [paraphrase]
+
+  # === decision 6: isolated test DB ===
+  - id: q41
+    query: "alembic downgrade wiped dev brain captures during test run"
+    expected_source_ids: [6]
+    tags: [paraphrase]
+
+  - id: q42
+    query: "BRAIN_TEST_DB_URL must point at brain_test not production brain"
+    expected_source_ids: [6]
+    tags: [vocab_match]
+
+  # === note 47 (BUGS.md) ===
+  - id: q43
+    query: "Click ctx.exit does not terminate process with non-zero code"
+    expected_source_ids: [47]
+    tags: [paraphrase]
+
+  - id: q44
+    query: "skill and slash command name collision in Claude Code"
+    expected_source_ids: [47]
+    tags: [paraphrase]
+
+  - id: q45
+    query: "PreToolUse Stop hook fires on brain recall causing false positive capture"
+    expected_source_ids: [47]
+    tags: [synonym]
+
+  # === decision 39 (tau calibration) ===
+  - id: q46
+    query: "per-reranker tau calibration DEFAULT_TAU class attribute"
+    expected_source_ids: [39]
+    tags: [vocab_match]
+
+  # === Additional controls ===
+  - id: c05
+    query: "configure terraform provider for AWS S3 bucket lifecycle rules"
+    expected_source_ids: []
+    tags: [control]
+    control: true
+
+  - id: c06
+    query: "Swift concurrency async await actors"
+    expected_source_ids: []
+    tags: [control]
+    control: true
+
+  - id: c07
+    query: "webpack HMR hot module replacement configuration"
+    expected_source_ids: []
+    tags: [control]
+    control: true
+
+  - id: c08
+    query: "elasticsearch index mapping for nested documents"
+    expected_source_ids: []
+    tags: [control]
+    control: true

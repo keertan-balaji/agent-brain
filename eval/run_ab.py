@@ -3,6 +3,9 @@
 The mxbai cross-encoder reranker is orthogonal and CPU-expensive (~30s/q);
 this script measures the headline question: does adding the dense leg help?
 A separate `--with-rerank` flag runs the full pipeline on a subset.
+A separate `--with-deep` flag adds the Phase 3b deep-tier arm (multi-query +
+Self-Query + CRAG via recall_deep).  Cold reasoning_cache → degraded mode
+(single variant, no CRAG) — a warning is printed if that is detected.
 
 Per question:
   - run both arms
@@ -13,6 +16,7 @@ Per question:
 Run from repo root:
     .venv/bin/python eval/run_ab.py
     .venv/bin/python eval/run_ab.py --with-rerank      # adds full hybrid arm
+    .venv/bin/python eval/run_ab.py --with-deep        # adds deep-tier arm
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from sqlalchemy import text
 from brain.config import load_config
 from brain.db import get_engine, session_scope
 from brain.read import recall
+from brain.retrieval.deep import recall_deep
 
 
 def _load_questions(path: Path) -> list[dict[str, Any]]:
@@ -64,7 +69,7 @@ def _hit_at_k(result_ids: list[int], expected: set[int], k: int) -> bool:
 
 def run_arm(engine, query: str, *, k: int, mode: str, embedder=None, reranker=None):
     """Returns (result_ids, top1_score, elapsed_ms).
-    mode in {'fts', 'hybrid', 'hybrid_rerank'}."""
+    mode in {'fts', 'hybrid', 'hybrid_rerank', 'hybrid_rerank_notau', 'deep'}."""
     t0 = time.time()
     if mode == "fts":
         hits = recall(engine, query, k=k)
@@ -76,12 +81,27 @@ def run_arm(engine, query: str, *, k: int, mode: str, embedder=None, reranker=No
         hits = recall(engine, query, k=k, embedder=embedder, reranker=reranker, tau=None)
     elif mode == "hybrid_rerank_notau":
         hits = recall(engine, query, k=k, embedder=embedder, reranker=reranker, tau=0.0)
+    elif mode == "deep":
+        hits = recall_deep(engine, query, k=k, embedder=embedder, reranker=reranker)
     else:
         raise ValueError(f"unknown mode: {mode}")
     elapsed = (time.time() - t0) * 1000
     ids = _result_ids(hits)
     top1 = float(hits[0].score) if hits else None
     return ids, top1, elapsed
+
+
+def _check_deep_cache_warmth(engine) -> bool:
+    """Return True if reasoning_cache has rows for the three Phase 3b helpers."""
+    with session_scope(engine) as s:
+        row = s.execute(
+            text(
+                "SELECT COUNT(*) FROM reasoning_cache "
+                "WHERE helper_name = ANY(:names)"
+            ),
+            {"names": ["multi_query_expander", "query_filter_extractor", "crag_verifier"]},
+        ).scalar()
+    return (row or 0) > 0
 
 
 def main() -> int:
@@ -98,6 +118,13 @@ def main() -> int:
         choices=["cuda", "cpu"],
         default=None,
         help="Force reranker device (overrides auto-detect)",
+    )
+    parser.add_argument(
+        "--with-deep",
+        action="store_true",
+        default=False,
+        help="Add a deep-tier arm (recall_deep: multi-query + Self-Query + CRAG). "
+             "Cold reasoning_cache → degraded single-variant mode; a warning is printed.",
     )
     args = parser.parse_args()
 
@@ -131,9 +158,20 @@ def main() -> int:
               f"(load {rr_load_ms:.0f}ms)", file=sys.stderr)
     print(f"embedder load {em_load_ms:.0f}ms\n", file=sys.stderr)
 
+    # --with-deep warmth check
+    if args.with_deep:
+        if not _check_deep_cache_warmth(engine):
+            print(
+                "WARNING: reasoning_cache has no rows for multi_query_expander / "
+                "query_filter_extractor / crag_verifier — deep arm is running in "
+                "degraded mode (single-variant, no CRAG). Pre-warm caches by running "
+                "brain recall --deep on representative queries before eval.",
+                file=sys.stderr,
+            )
+
     arms = ["fts", "hybrid"] + (
         ["hybrid_rerank", "hybrid_rerank_notau"] if reranker is not None else []
-    )
+    ) + (["deep"] if args.with_deep else [])
     rows = []
     arm_stats: dict[str, dict[str, Any]] = {
         a: {"hit@1": 0, "hit@3": 0, "hit@5": 0, "fp_on_control": 0, "ms_total": 0.0}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% import 'macros.html' as m %}
+
+{% block title %}Health — Agent Brain{% endblock %}
+{% block page_title %}System Observability{% endblock %}
+{% block topbar_meta %}
+  <span class="inline-flex items-center px-2 py-1 rounded-DEFAULT border border-surface-container-highest font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low">
+    <span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-2"></span>
+    Live snapshot
+  </span>
+{% endblock %}
+
+{% block content %}
+<div class="flex-1 overflow-y-auto p-margin md:p-6 lg:p-8 space-y-6">
+
+  {# === Source population ============================================ #}
+  <section>
+    <h3 class="font-label-md text-label-md uppercase tracking-widest text-on-surface-variant mb-3">Source population</h3>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-gutter">
+      {% set tiles = [
+        ("Substantive", stats.sources_substantive),
+        ("Total rows",  stats.sources_total),
+        ("Chunks",      stats.sources_chunks),
+        ("Embedded",    stats.embedding.embedded),
+      ] %}
+      {% for label, value in tiles %}
+      <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+        <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">{{ label }}</div>
+        <div class="font-headline-lg text-headline-lg text-on-surface mt-2">{{ value }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# === Recent activity ============================================== #}
+  <section>
+    <h3 class="font-label-md text-label-md uppercase tracking-widest text-on-surface-variant mb-3">Capture activity</h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+      <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+        <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">Past hour</div>
+        <div class="font-headline-md text-headline-md text-on-surface mt-2">{{ stats.captures_1h }}</div>
+      </div>
+      <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+        <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">Past 24h</div>
+        <div class="font-headline-md text-headline-md text-on-surface mt-2">{{ stats.captures_24h }}</div>
+      </div>
+      <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+        <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">Past 7d</div>
+        <div class="font-headline-md text-headline-md text-on-surface mt-2">{{ stats.captures_7d }}</div>
+      </div>
+    </div>
+  </section>
+
+  {# === Embedding + staleness ======================================== #}
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+    <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+      <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-2">Embedding coverage</div>
+      <div class="font-headline-lg text-headline-lg text-primary-container">{{ "%.1f" | format(stats.embedding.percent) }}%</div>
+      <div class="font-body-sm text-body-sm text-on-surface-variant">{{ stats.embedding.embedded }} of {{ stats.embedding.total }} substantive sources embedded.</div>
+    </div>
+    <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+      <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-2">Staleness</div>
+      <div class="font-headline-lg text-headline-lg text-on-surface">{{ stats.staleness.total }}</div>
+      <div class="font-body-sm text-body-sm text-on-surface-variant">
+        changed={{ stats.staleness.changed }} · missing={{ stats.staleness.missing }} · untracked={{ stats.staleness.untracked }} · scanned={{ stats.staleness.scanned }}
+      </div>
+    </div>
+  </section>
+
+  {# === Retrieval + pool ============================================ #}
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+    <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+      <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-2">Retrieval latency (24h)</div>
+      <div class="flex gap-6">
+        <div>
+          <div class="font-label-sm text-label-sm text-on-surface-variant">p50</div>
+          <div class="font-headline-md text-headline-md text-on-surface">{{ "%.0f" | format(stats.retrieval.p50_ms) }} ms</div>
+        </div>
+        <div>
+          <div class="font-label-sm text-label-sm text-on-surface-variant">p95</div>
+          <div class="font-headline-md text-headline-md text-on-surface">{{ "%.0f" | format(stats.retrieval.p95_ms) }} ms</div>
+        </div>
+        <div>
+          <div class="font-label-sm text-label-sm text-on-surface-variant">Samples</div>
+          <div class="font-headline-md text-headline-md text-on-surface">{{ stats.retrieval.sample_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="bg-surface-container border border-surface-container-highest rounded-DEFAULT p-4">
+      <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-2">DB pool</div>
+      <div class="flex gap-6 font-body-md text-body-md text-on-surface">
+        <div>size <span class="font-label-md text-primary">{{ stats.pool.size }}</span></div>
+        <div>in <span class="font-label-md text-primary">{{ stats.pool.checked_in }}</span></div>
+        <div>out <span class="font-label-md text-primary">{{ stats.pool.checked_out }}</span></div>
+        <div>overflow <span class="font-label-md text-primary">{{ stats.pool.overflow }}</span></div>
+      </div>
+    </div>
+  </section>
+
+  {# === Last activity =============================================== #}
+  <section class="bg-surface-container-low border border-surface-container-highest rounded-DEFAULT p-4">
+    <div class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant mb-2">Activity</div>
+    <div class="font-body-md text-body-md text-on-surface-variant">
+      Last capture:
+      <span class="font-label-md text-on-surface">{{ stats.last_capture_at or "—" }}</span> ·
+      Last session event:
+      <span class="font-label-md text-on-surface">{{ stats.last_session_event_at or "—" }}</span>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

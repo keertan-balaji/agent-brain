@@ -39,8 +39,8 @@
         </a>
       </li>
       <li>
-        <a class="flex items-center gap-3 px-4 py-3 transition-all text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest" href="#">
-          <span class="material-symbols-outlined">pulse_alert</span>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all {% if active == 'health' %}text-on-primary bg-primary-container border-l-2 border-primary scale-[0.99]{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest{% endif %}" href="/health">
+          <span class="material-symbols-outlined" {% if active == 'health' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>pulse_alert</span>
           <span class="font-label-md text-label-md">Health</span>
         </a>
       </li>

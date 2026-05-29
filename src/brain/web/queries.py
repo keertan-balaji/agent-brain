@@ -339,6 +339,160 @@ def source_by_id(engine: Engine, *, source_id: int) -> SourceDetail | None:
     )
 
 
+# ============ Health page ============
+
+class PoolStats(BaseModel):
+    size: int
+    checked_in: int
+    checked_out: int
+    overflow: int
+
+
+class RetrievalLatency(BaseModel):
+    p50_ms: float
+    p95_ms: float
+    sample_count: int
+
+
+class HealthStats(BaseModel):
+    sources_total: int
+    sources_substantive: int
+    sources_chunks: int
+    captures_1h: int
+    captures_24h: int
+    captures_7d: int
+    embedding: EmbeddingCoverage
+    staleness: StalenessBlock
+    pool: PoolStats
+    retrieval: RetrievalLatency
+    last_capture_at: datetime | None
+    last_session_event_at: datetime | None
+
+
+def health_stats(engine: Engine) -> HealthStats:
+    """Aggregate observability snapshot. Reuses dashboard math where possible."""
+    with session_scope(engine) as s:
+        sources_total = s.execute(text("SELECT COUNT(*) FROM sources")).scalar() or 0
+        sources_chunks = s.execute(
+            text("SELECT COUNT(*) FROM sources WHERE parent_id IS NOT NULL")
+        ).scalar() or 0
+        sources_substantive = s.execute(
+            text(
+                "SELECT COUNT(*) FROM sources "
+                "WHERE kind = ANY(:k) AND t_valid_to IS NULL AND parent_id IS NULL"
+            ),
+            {"k": _SUBSTANTIVE_KINDS},
+        ).scalar() or 0
+        captures_1h = s.execute(
+            text(
+                "SELECT COUNT(*) FROM sources "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "  AND created_at >= NOW() - INTERVAL '1 hour'"
+            ),
+            {"k": _SUBSTANTIVE_KINDS},
+        ).scalar() or 0
+        captures_24h = s.execute(
+            text(
+                "SELECT COUNT(*) FROM sources "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "  AND created_at >= NOW() - INTERVAL '24 hours'"
+            ),
+            {"k": _SUBSTANTIVE_KINDS},
+        ).scalar() or 0
+        captures_7d = s.execute(
+            text(
+                "SELECT COUNT(*) FROM sources "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "  AND created_at >= NOW() - INTERVAL '7 days'"
+            ),
+            {"k": _SUBSTANTIVE_KINDS},
+        ).scalar() or 0
+        last_cap_at = s.execute(
+            text(
+                "SELECT created_at FROM sources "
+                "WHERE kind = ANY(:k) AND parent_id IS NULL "
+                "ORDER BY created_at DESC LIMIT 1"
+            ),
+            {"k": _SUBSTANTIVE_KINDS},
+        ).scalar()
+        last_session_at = s.execute(
+            text("SELECT MAX(occurred_at) FROM session_events")
+        ).scalar()
+
+        # Embedding coverage (mirrors dashboard math).
+        emb_count = s.execute(
+            text(
+                "SELECT COUNT(DISTINCT s.id) FROM sources s "
+                "WHERE s.kind = ANY(:k) AND s.t_valid_to IS NULL AND s.parent_id IS NULL "
+                "  AND EXISTS ("
+                "    SELECT 1 FROM embeddings_1024 e "
+                "    JOIN sources child ON child.id = e.source_id "
+                "    WHERE child.parent_id = s.id OR child.id = s.id"
+                "  )"
+            ),
+            {"k": _SUBSTANTIVE_KINDS},
+        ).scalar() or 0
+
+        # Retrieval latency from retrieval_log. Use duration_ms column.
+        # Fall back to zero counts if the table is empty or column is absent.
+        try:
+            latency_rows = s.execute(
+                text(
+                    "SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY duration_ms) AS p50, "
+                    "       percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95, "
+                    "       COUNT(*) AS n "
+                    "FROM retrieval_log "
+                    "WHERE occurred_at >= NOW() - INTERVAL '24 hours'"
+                )
+            ).first()
+            p50 = float(latency_rows.p50 or 0)
+            p95 = float(latency_rows.p95 or 0)
+            n_samples = int(latency_rows.n or 0)
+        except Exception:
+            # Column might be named differently in older schemas — degrade silently.
+            p50, p95, n_samples = 0.0, 0.0, 0
+
+    # Staleness (reuses scan_db).
+    report = scan_db(engine)
+    by_status: dict[str, int] = {"changed": 0, "missing": 0, "untracked": 0}
+    for sx in report.stale_sources:
+        by_status[sx.status] = by_status.get(sx.status, 0) + 1
+
+    # Pool stats from SQLAlchemy.
+    pool = engine.pool
+    pool_stats = PoolStats(
+        size=int(getattr(pool, "size", lambda: 0)()),
+        checked_in=int(getattr(pool, "checkedin", lambda: 0)()),
+        checked_out=int(getattr(pool, "checkedout", lambda: 0)()),
+        overflow=int(getattr(pool, "overflow", lambda: 0)()),
+    )
+
+    return HealthStats(
+        sources_total=int(sources_total),
+        sources_substantive=int(sources_substantive),
+        sources_chunks=int(sources_chunks),
+        captures_1h=int(captures_1h),
+        captures_24h=int(captures_24h),
+        captures_7d=int(captures_7d),
+        embedding=EmbeddingCoverage(
+            embedded=int(emb_count),
+            total=int(sources_substantive),
+            percent=(100.0 * int(emb_count) / int(sources_substantive)) if sources_substantive else 0.0,
+        ),
+        staleness=StalenessBlock(
+            total=len(report.stale_sources),
+            changed=by_status["changed"],
+            missing=by_status["missing"],
+            untracked=by_status["untracked"],
+            scanned=report.scanned_sources,
+        ),
+        pool=pool_stats,
+        retrieval=RetrievalLatency(p50_ms=p50, p95_ms=p95, sample_count=n_samples),
+        last_capture_at=last_cap_at,
+        last_session_event_at=last_session_at,
+    )
+
+
 # ============ Helpers ============
 
 def _relative_time(dt: datetime) -> str:

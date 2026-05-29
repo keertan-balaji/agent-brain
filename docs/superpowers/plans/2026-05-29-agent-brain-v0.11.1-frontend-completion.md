@@ -1,5 +1,7 @@
 # Agent Brain v0.11.1 — Brain Telescope Frontend Completion Plan
 
+> **Historical plan — completed.** v0.11.1 shipped via commits `14f845a..66f518a`. The `frontend-design/` references throughout this plan now point to removed paths — the design manifest survives at `docs/design/crimson-matrix.md`, screenshots at `docs/design/screenshots/`, and the production Tailwind theme config lives at `src/brain/web/templates/base.html`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Wire up the four remaining frontend surfaces — `/recall`, `/health`, `/knowledge`, and the favicon 404 — so the v0.11.0 Brain Telescope sidebar has no dead links and every Stitch Crimson Matrix mockup is live with real (or seeded-but-illustrative) data.

@@ -1,5 +1,7 @@
 # Agent Brain v0.11.0 — Brain Insights Frontend (Telescope) Implementation Plan
 
+> **Historical plan — completed.** v0.11.0 shipped via commits `bab749a..63fe26f`. The `frontend-design/` references throughout this plan now point to removed paths — the design manifest survives at `docs/design/crimson-matrix.md`, screenshots at `docs/design/screenshots/`, and the production Tailwind theme config lives at `src/brain/web/templates/base.html`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a local FastAPI + Jinja + HTMX web frontend for the brain — a single-glance dark instrument panel showing dashboard + source browser + source detail (+ optional recall console). Minimum slice; analytics + graph deferred to v0.11.1-2.

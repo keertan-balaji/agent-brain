@@ -13,12 +13,13 @@ A local web frontend for the agent-brain — a single-glance instrument panel th
 The current locked design. Generated via Google's Stitch (Crimson Matrix theme) and accepted as the canonical visual identity for v0.11.0. Replaces v1 (Fraunces+Manrope editorial), v2 (system-ui minimal), AND v3-green (Persistent Cognition Protocol). High-contrast dark mode + technical minimalism: deep-black canvas, vibrant crimson primary reserved for primary actions / critical alerts / active status, strict 2px corner radius, JetBrains Mono headlines, Geist body. "Controlled urgency" — the void provides the empty canvas; crimson signals the alarms.
 
 **Canonical source files:**
-- `frontend-design/stitch_agent_brain_dashboard/crimson_matrix/DESIGN.md` — token + philosophy manifest
-- `frontend-design/mockups/dashboard.html` (from `dashboard_crimson_matrix/code.html`)
-- `frontend-design/mockups/sources.html` (from `sources_browser_crimson_matrix/code.html`)
-- `frontend-design/mockups/recall.html` (from `recall_interface_crimson_matrix/code.html`)
-- `frontend-design/mockups/knowledge.html` (from `knowledge_visualizer_crimson_matrix/code.html`) — v0.11.2 graph
-- `frontend-design/mockups/health.html` (from `health_observability_crimson_matrix/code.html`) — v0.11.1 health
+- `docs/design/crimson-matrix.md` — token + philosophy manifest (extracted from Stitch)
+- `docs/design/screenshots/dashboard.png` — visual reference
+- `docs/design/screenshots/sources.png`
+- `docs/design/screenshots/recall.png` — shipped in v0.11.1
+- `docs/design/screenshots/knowledge.png` — shipped in v0.11.1
+- `docs/design/screenshots/health.png` — shipped in v0.11.1
+- Production source-of-truth for the Tailwind theme config: `src/brain/web/templates/base.html` (live `<script id="tailwind-config">` block).
 
 > **Gap:** Stitch did not generate a `source_detail_crimson_matrix/` variant. Implementation must compose the source-detail page from the Crimson primitives demonstrated by the other 5 pages (sidebar, topbar, cards, tables, chips, scrollbar). Treat the layout from the green `_v3-green-legacy/source-detail.html` as the layout skeleton; replace all tokens with Crimson Matrix values.
 
@@ -197,7 +198,7 @@ spacing: {
 
 ## v2 Aesthetic direction (ARCHIVED — superseded by v3)
 
-> Archived for posterity. Do not implement. See `frontend-design/_v2-legacy/` for the prior mockups.
+> Archived for posterity. Do not implement. v2 mockup files have been removed from the repo; the v3.1 Crimson Matrix design at `docs/design/` is canonical.
 
 A dark, restrained instrument panel. Stripe-dashboard minimalism, not magazine-editorial.
 
@@ -515,20 +516,13 @@ Single command. Refuses to start if `BRAIN_DB_URL` not reachable.
 
 None. Local-only. Document that `--host 0.0.0.0` exposes the brain to the LAN with NO auth — only use in trusted networks.
 
-## Mockups (v3 — Stitch Persistent Cognition Protocol)
+## Mockups (v3 — historical, superseded by v3.1 Crimson Matrix)
 
-Working HTML mockups bundled at:
+The v3 green "Persistent Cognition Protocol" mockups have been removed from the repo. They were superseded by v3.1 Crimson Matrix before any production code was written. The production source-of-truth for the live Tailwind theme is `src/brain/web/templates/base.html` (inlined `<script id="tailwind-config">` block).
 
-- `frontend-design/mockups/dashboard.html` (from Stitch `dashboard_dark/code.html`)
-- `frontend-design/mockups/sources.html` (from Stitch `sources_browser_dark/code.html`)
-- `frontend-design/mockups/source-detail.html` (from Stitch `source_detail_dark/code.html`)
-- `frontend-design/mockups/recall.html` (from Stitch `recall_interface_dark/code.html`) — bonus page
+Reference screenshots of the shipped v3.1 design live at `docs/design/screenshots/`.
 
-There is no shared `styles.css` in v3; each mockup inlines its own Tailwind config + small `<style>` block (scrollbar, icon variation settings). Production extracts the config into `base.html` and serves Tailwind via CDN.
-
-Reference screenshots are alongside each mockup as `.png`.
-
-The v2 mockups + `styles.css` are archived at `frontend-design/_v2-legacy/` and must not be used for implementation.
+The v2 mockups + `styles.css` have also been removed. Spec doc retains the v2 section below purely as historical record of the design evolution.
 
 ## Out-of-scope (explicitly)
 

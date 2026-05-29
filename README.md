@@ -341,7 +341,7 @@ Pages shipped:
 
 Deferred to v0.12.0+: vector + rerank in recall, entity-extraction edges in graph, sessions timeline, hooks dashboard, retrieval analytics page, vendor Tailwind for SRI.
 
-Design spec: `docs/superpowers/specs/2026-05-28-brain-insights-frontend-design.md`. Mockups: `frontend-design/mockups/`. Operations doc: `docs/v0.11.1-frontend-completion.md`.
+Design manifest: `docs/design/crimson-matrix.md` (canonical tokens). Screenshots: `docs/design/screenshots/`. Full design spec: `docs/superpowers/specs/2026-05-28-brain-insights-frontend-design.md`. Operations doc: `docs/v0.11.1-frontend-completion.md`.
 
 ## Design docs
 

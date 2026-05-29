@@ -1,5 +1,9 @@
 ---
 name: Crimson Matrix
+shipping_version: v0.11.1
+status: canonical
+production_source_of_truth: src/brain/web/templates/base.html
+visual_reference: docs/design/screenshots/
 colors:
   surface: '#131313'
   surface-dim: '#131313'

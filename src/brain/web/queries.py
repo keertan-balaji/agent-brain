@@ -583,7 +583,10 @@ def knowledge_graph_data(engine: Engine, *, limit: int = 50) -> GraphData:
                     continue
                 chunk_count_per_parent[pid] = chunk_count_per_parent.get(pid, 0) + 1
                 cnode_id = f"c-{c.id}"
-                nodes.append(GraphNode(id=cnode_id, label=f"chunk #{c.id}", kind=c.kind, project_id=None))
+                # Display kind "chunk" is a presentational concept — chunk rows in the DB
+                # inherit their parent's kind ("decision", "note", etc.), so we override here
+                # so the Cytoscape stylesheet (node[kind='chunk']) and legend color apply.
+                nodes.append(GraphNode(id=cnode_id, label=f"chunk #{c.id}", kind="chunk", project_id=None))
                 edges.append(GraphEdge(source=f"s-{pid}", target=cnode_id, kind="parent-of"))
 
     return GraphData(nodes=nodes, edges=edges)

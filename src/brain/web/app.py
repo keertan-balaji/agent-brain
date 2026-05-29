@@ -32,11 +32,17 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     web_root = Path(__file__).parent
     app.mount("/static", StaticFiles(directory=str(web_root / "static")), name="static")
 
+    from brain.web.routes.api import router as api_router
     from brain.web.routes.dashboard import router as dashboard_router
-    from brain.web.routes.sources import router as sources_router
     from brain.web.routes.htmx import router as htmx_router
+    from brain.web.routes.meta import router as meta_router
+    from brain.web.routes.recall import router as recall_router
+    from brain.web.routes.sources import router as sources_router
     app.include_router(dashboard_router)
     app.include_router(sources_router)
     app.include_router(htmx_router)
+    app.include_router(recall_router)
+    app.include_router(api_router)
+    app.include_router(meta_router)
 
     return app

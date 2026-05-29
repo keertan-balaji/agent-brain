@@ -1,0 +1,31 @@
+{# Single recall hit card. Context var: `hit` (a RecallHit dataclass) #}
+<div class="recall-hit border border-surface-container-highest bg-surface-container-lowest rounded-DEFAULT overflow-hidden group hover:border-primary-container transition-colors relative">
+  <div class="absolute top-0 left-0 w-1 h-full bg-primary-container"></div>
+  <div class="p-4 pl-6">
+    <div class="flex justify-between items-start mb-2">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-container text-sm">description</span>
+        <h3 class="font-label-md text-label-md text-on-surface truncate max-w-md">
+          <a href="/sources/{{ hit.id }}" class="hover:text-primary">
+            {{ hit.kind }} #{{ hit.id }}
+          </a>
+        </h3>
+      </div>
+      <div class="flex flex-col items-end">
+        <span class="font-label-sm text-[10px] text-on-surface-variant">FTS Score</span>
+        <span class="font-headline-sm text-sm text-primary">{{ "%.3f" | format(hit.score) }}</span>
+      </div>
+    </div>
+    <div class="bg-surface-container-lowest border border-surface-container-high p-3 rounded-DEFAULT font-body-md text-sm text-on-surface-variant leading-relaxed overflow-x-auto">
+      <pre class="whitespace-pre-wrap">{{ hit.content[:500] }}{% if hit.content | length > 500 %}…{% endif %}</pre>
+    </div>
+    <div class="flex justify-between items-center mt-3 pt-3 border-t border-surface-container-highest">
+      <span class="font-label-sm text-[10px] text-on-surface-variant">
+        {% if hit.project_id %}project={{ hit.project_id }}{% else %}no project{% endif %}
+      </span>
+      <a href="/sources/{{ hit.id }}" class="font-label-sm text-label-sm text-primary hover:text-primary-container transition-colors flex items-center gap-1">
+        <span class="material-symbols-outlined text-[14px]">open_in_new</span> Open
+      </a>
+    </div>
+  </div>
+</div>

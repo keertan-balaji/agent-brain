@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Recall — Agent Brain{% endblock %}
+{% block page_title %}Recall{% endblock %}
+{% block topbar_meta %}
+  <span class="inline-flex items-center px-2 py-1 rounded-DEFAULT border border-surface-container-highest font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low">
+    <span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-2"></span>
+    FTS path
+  </span>
+{% endblock %}
+
+{% block content %}
+<div class="flex-1 overflow-y-auto p-margin md:p-6 lg:p-8 space-y-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-surface-container-highest pb-4">
+    <div>
+      <h2 class="font-headline-lg text-headline-lg text-on-surface">Memory Retrieval</h2>
+      <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+        FTS search over substantive sources. Vector + rerank land in v0.11.2.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <span class="inline-flex items-center px-2 py-1 rounded-DEFAULT border border-surface-container-highest font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low">
+        <span class="w-1.5 h-1.5 rounded-full bg-primary-container mr-2"></span>
+        Index: Live
+      </span>
+    </div>
+  </div>
+
+  <form action="/recall" method="get" class="relative w-full group">
+    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+      <span class="material-symbols-outlined text-on-surface-variant group-focus-within:text-primary-container transition-colors">search</span>
+    </div>
+    <input
+      class="block w-full pl-12 pr-4 py-4 bg-surface-container-low border border-surface-container-highest rounded-DEFAULT font-headline-sm text-headline-sm text-on-surface placeholder-on-surface-variant focus:border-primary-container focus:ring-0 focus:outline-none transition-colors"
+      placeholder="Enter a recall query…"
+      type="text"
+      name="q"
+      value="{{ q | e }}"
+      autofocus
+    />
+  </form>
+
+  <div class="flex flex-wrap items-center justify-end gap-4 py-2">
+    <div class="flex flex-col items-end">
+      <span class="font-label-sm text-label-sm text-on-surface-variant">Matches</span>
+      <span class="font-headline-sm text-headline-sm text-primary-container">{{ match_count }}</span>
+    </div>
+  </div>
+
+  <div class="space-y-4">
+    {% for hit in hits %}
+      {% include 'partials/_recall_hit.html' %}
+    {% else %}
+      <div class="border border-dashed border-surface-container-highest rounded-DEFAULT p-8 text-center text-on-surface-variant font-body-md">
+        {% if q %}
+          No matches for "<span class="text-primary font-label-md">{{ q | e }}</span>".
+        {% else %}
+          Enter a query to search the brain.
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

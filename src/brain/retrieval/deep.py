@@ -76,12 +76,16 @@ def recall_deep(
 
     # ---- Per-variant Fast-tier recall + RRF fusion -----------------------
     # rrf_fuse expects Sequence[Iterable[int]] (plain doc IDs, not tuples).
+    # When no reranker is present tau=None triggers per-bucket abstain on raw
+    # RRF scores (which are not calibrated).  Default to tau=0 so all results
+    # pass through; callers that want abstain should pass a reranker explicitly.
+    effective_tau = tau if tau is not None else (None if reranker is not None else 0.0)
     per_variant_id_lists: list[list[int]] = []
     for v in variants:
         hits = recall(
             engine, v, k=k * 3,  # wider per-variant pool so fusion can reorder
             project_id=project_id, kinds=kinds,
-            embedder=embedder, reranker=reranker, tau=tau,
+            embedder=embedder, reranker=reranker, tau=effective_tau,
         )
         per_variant_id_lists.append([h.id for h in hits])
 

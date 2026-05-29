@@ -119,6 +119,8 @@ def write(
 @click.option("--fts-only", is_flag=True, help="Skip the dense leg; FTS-only retrieval (fast, no semantic recall)")
 @click.option("--no-rerank", is_flag=True, help="Skip the cross-encoder reranker (faster, but tau abstains on raw RRF scores)")
 @click.option("--no-tau", is_flag=True, help="Skip the abstain threshold; always return top-k")
+@click.option("--deep", is_flag=True, default=False,
+              help="Deep tier: multi-query + Self-Query + CRAG verification. ~3s p99 vs ~500ms Fast.")
 @click.pass_context
 def recall(
     ctx: click.Context,
@@ -130,6 +132,7 @@ def recall(
     fts_only: bool,
     no_rerank: bool,
     no_tau: bool,
+    deep: bool,
 ) -> None:
     """Retrieve top-k sources matching a query.
 
@@ -150,17 +153,29 @@ def recall(
             reranker = default_reranker()
     # --no-tau sets tau to 0 so should_abstain only triggers on None scores
     tau = 0.0 if no_tau else None
-    hits = _recall(
-        ctx.obj["engine"],
-        query,
-        k=k,
-        project_id=project_id,
-        buckets=list(bucket) or None,  # type: ignore[arg-type]
-        kinds=list(kind_filter) or None,
-        embedder=embedder,
-        reranker=reranker,
-        tau=tau,
-    )
+    if deep:
+        from brain.retrieval.deep import recall_deep
+        hits = recall_deep(
+            ctx.obj["engine"],
+            query,
+            k=k,
+            project_id=project_id,
+            embedder=embedder,
+            reranker=reranker,
+            tau=tau,
+        )
+    else:
+        hits = _recall(
+            ctx.obj["engine"],
+            query,
+            k=k,
+            project_id=project_id,
+            buckets=list(bucket) or None,  # type: ignore[arg-type]
+            kinds=list(kind_filter) or None,
+            embedder=embedder,
+            reranker=reranker,
+            tau=tau,
+        )
     table = Table("id", "kind", "score", "content (head)")
     for h in hits:
         head = quote_origin(h.kind, h.content[:80])
@@ -1207,7 +1222,7 @@ def serve(ctx: click.Context, host: str, port: int, reload: bool) -> None:
     """Launch Brain Telescope — local web frontend at http://<host>:<port> (v0.11.0)."""
     import uvicorn
 
-    click.echo(f"Telescope live at http://{host}:{port}")
+    click.echo(f"Brain Telescope running at http://{host}:{port}")
     uvicorn.run(
         "brain.web.app:create_app",
         factory=True,

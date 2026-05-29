@@ -18,7 +18,7 @@ def sources(
     q: str = Query("", max_length=200),
     page: int = Query(1, ge=1),
 ) -> HTMLResponse:
-    page_data = list_sources(request.app.state.engine, kind=kind, page=page, per_page=30)
+    page_data = list_sources(request.app.state.engine, kind=kind, page=page, per_page=50)
     return templates.TemplateResponse(
         request,
         "sources.html",

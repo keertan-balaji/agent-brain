@@ -28,19 +28,26 @@
           {% endif %}
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <a href="#" class="h-8 px-3 rounded flex items-center gap-2 border border-surface-container-highest text-on-surface hover:border-outline hover:bg-surface-container font-label-md text-label-md transition-colors">
+      <div class="flex items-center gap-2" id="action-bar-status">
+        {% if source.t_valid_to %}
+          <span class="px-2 py-0.5 border border-error/40 text-error font-label-sm text-label-sm rounded uppercase">Invalidated</span>
+        {% else %}
+        <button
+          hx-post="/api/sources/{{ source.id }}/invalidate"
+          hx-target="#action-bar-status"
+          hx-swap="innerHTML"
+          hx-confirm="Invalidate source #{{ source.id }}? This sets t_valid_to=now()."
+          class="h-8 px-3 rounded flex items-center gap-2 border border-surface-container-highest text-on-surface hover:border-error hover:text-error hover:bg-surface-container font-label-md text-label-md transition-colors">
           <span class="material-symbols-outlined text-[16px]">block</span>
           Invalidate
-        </a>
-        <a href="#" class="h-8 px-3 rounded flex items-center gap-2 border border-surface-container-highest text-on-surface hover:border-outline hover:bg-surface-container font-label-md text-label-md transition-colors">
-          <span class="material-symbols-outlined text-[16px]">upgrade</span>
-          Revise from diff
-        </a>
-        <a href="/recall#{{ source.id }}" class="h-8 px-3 rounded flex items-center gap-2 border border-outline-variant text-primary bg-primary-container/10 hover:bg-primary-container/20 font-label-md text-label-md transition-colors">
+        </button>
+        <a href="/recall?q={{ source.content[:80]|urlencode }}"
+           title="FTS recall on the first 80 chars of this source"
+           class="h-8 px-3 rounded flex items-center gap-2 border border-outline-variant text-primary bg-primary-container/10 hover:bg-primary-container/20 font-label-md text-label-md transition-colors">
           <span class="material-symbols-outlined text-[16px]">history</span>
           Open in recall
         </a>
+        {% endif %}
       </div>
     </div>
 

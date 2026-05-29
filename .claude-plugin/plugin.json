@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Postgres-backed second brain for AI agents — v0.12.0 Phase 3b deep recall: multi-query expansion + Self-Query filters + CRAG verification via brain recall --deep. Telescope web frontend (FastAPI + HTMX + Alpine + Cytoscape) unchanged. No node toolchain.",
-  "version": "0.12.0",
+  "description": "Postgres-backed second brain for AI agents — v0.12.1 action bar (invalidate from source-detail) + Phase 3b deep recall: multi-query + Self-Query + CRAG via brain recall --deep. Telescope web frontend (FastAPI + HTMX + Alpine + Cytoscape). No node toolchain.",
+  "version": "0.12.1",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

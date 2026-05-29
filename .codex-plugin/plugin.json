@@ -1,6 +1,6 @@
 {
   "name": "agent-brain",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Postgres-backed second brain for AI agents — v0.12.0 Phase 3b deep recall: brain recall --deep adds multi-query expansion (MultiQueryExpander) + Self-Query filters (QueryFilterExtractor) + CRAG verification (CragVerifier). Telescope web frontend (FastAPI + HTMX + Alpine + Cytoscape) unchanged. 19 brain-* skills + 5 obsidian-* skills.",
   "author": {
     "name": "Keertan Balaji",

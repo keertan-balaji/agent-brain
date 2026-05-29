@@ -5,8 +5,8 @@
     "email": "keertan@syntheticsciences.ai"
   },
   "metadata": {
-    "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend.",
-    "version": "0.11.0"
+    "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.1 adds /recall, /health, and /knowledge pages to the Brain Telescope.",
+    "version": "0.11.1"
   },
   "plugins": [
     {
@@ -15,8 +15,8 @@
         "source": "url",
         "url": "https://github.com/keertan-balaji/agent-brain.git"
       },
-      "description": "v0.11.0: Brain Telescope — dark Crimson Matrix web frontend (FastAPI + HTMX) via `brain serve`. Plus v0.10.1 PreToolUse auto-recall + v0.10.0 revise --from-diff + v0.9.0 staleness + v0.8.5 noise filters + v0.8.4 auto-embed + v0.8.3 hybrid recall. hit@5 = 25% → 100% on 16-Q eval. 19 brain-* + 5 obsidian-* skills.",
-      "version": "0.11.0",
+      "description": "v0.11.1: Brain Telescope full sidebar — /recall (FTS console), /health (observability), /knowledge (Cytoscape graph) added to v0.11.0 dashboard + sources. FastAPI + HTMX + Alpine + Cytoscape. Plus v0.10.1 PreToolUse auto-recall + v0.10.0 revise --from-diff + v0.9.0 staleness + v0.8.5 noise filters + v0.8.4 auto-embed + v0.8.3 hybrid recall. hit@5 = 25% → 100% on 16-Q eval. 19 brain-* + 5 obsidian-* skills.",
+      "version": "0.11.1",
       "strict": true
     }
   ]

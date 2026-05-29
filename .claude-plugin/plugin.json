@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.0 ships the Brain Telescope: a dark Crimson Matrix instrument panel (FastAPI + HTMX) accessible at http://127.0.0.1:8765 via `brain serve`.",
-  "version": "0.11.0",
+  "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.1 completes the Brain Telescope sidebar: /recall (FTS console), /health (observability), and /knowledge (Cytoscape graph). FastAPI + HTMX + Alpine + Cytoscape, no node toolchain.",
+  "version": "0.11.1",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai"

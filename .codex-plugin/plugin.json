@@ -1,7 +1,7 @@
 {
   "name": "agent-brain",
-  "version": "0.11.0",
-  "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.0 ships the Brain Telescope: a dark Crimson Matrix instrument panel (FastAPI + HTMX) accessible via `brain serve`. 19 brain-* skills cover capture, recall, structured reasoning, contextual ingest, failure-memory, session lifecycle, compliance, usage discipline, staleness. 5 obsidian-* skills retained for vault interop.",
+  "version": "0.11.1",
+  "description": "Postgres-backed second brain for AI agents — capture, recall, and inspect via the Telescope web frontend. v0.11.1 completes the Brain Telescope sidebar: /recall (FTS console), /health (observability), /knowledge (Cytoscape graph) on top of the v0.11.0 Crimson Matrix instrument panel. FastAPI + HTMX + Alpine + Cytoscape, no node toolchain. 19 brain-* skills cover capture, recall, structured reasoning, contextual ingest, failure-memory, session lifecycle, compliance, usage discipline, staleness. 5 obsidian-* skills retained for vault interop.",
   "author": {
     "name": "Keertan Balaji",
     "email": "keertan@syntheticsciences.ai",

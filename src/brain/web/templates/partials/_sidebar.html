@@ -33,6 +33,12 @@
         </a>
       </li>
       <li>
+        <a class="flex items-center gap-3 px-4 py-3 transition-all {% if active == 'knowledge' %}text-on-primary bg-primary-container border-l-2 border-primary scale-[0.99]{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest{% endif %}" href="/knowledge">
+          <span class="material-symbols-outlined" {% if active == 'knowledge' %}style="font-variation-settings: 'FILL' 1;"{% endif %}>hub</span>
+          <span class="font-label-md text-label-md">Knowledge</span>
+        </a>
+      </li>
+      <li>
         <a class="flex items-center gap-3 px-4 py-3 transition-all text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest" href="#">
           <span class="material-symbols-outlined">folder_open</span>
           <span class="font-label-md text-label-md">Projects</span>

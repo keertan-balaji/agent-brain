@@ -502,6 +502,93 @@ def health_stats(engine: Engine) -> HealthStats:
     )
 
 
+# ============ Knowledge graph ============
+
+class GraphNode(BaseModel):
+    id: str           # cytoscape requires string ids
+    label: str
+    kind: str
+    project_id: int | None
+
+
+class GraphEdge(BaseModel):
+    source: str       # cytoscape: "source" is the from-node id
+    target: str       # "target" is the to-node id
+    kind: str         # "parent-of" | "same-project"
+
+
+class GraphData(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+def knowledge_graph_data(engine: Engine, *, limit: int = 50) -> GraphData:
+    """Return a lightweight node+edge view for Cytoscape rendering.
+
+    Strategy: take top-N substantive sources by recency. Edges:
+      1. parent-of: from each substantive source to up to 3 child chunks.
+      2. same-project: cluster substantive sources sharing project_id under
+         a synthetic project node (id "project-<pid>", kind "project").
+
+    Heavy entity-extraction edges are deferred to v0.11.2.
+    """
+    with session_scope(engine) as s:
+        rows = s.execute(
+            text(
+                "SELECT id, kind, content, project_id FROM sources "
+                "WHERE kind = ANY(:k) AND t_valid_to IS NULL AND parent_id IS NULL "
+                "ORDER BY created_at DESC LIMIT :lim"
+            ),
+            {"k": _SUBSTANTIVE_KINDS, "lim": limit},
+        ).all()
+
+        nodes: list[GraphNode] = []
+        edges: list[GraphEdge] = []
+        seen_projects: set[int] = set()
+
+        for r in rows:
+            node_id = f"s-{r.id}"
+            preview = (r.content or "").strip().splitlines()[0][:60]
+            nodes.append(
+                GraphNode(
+                    id=node_id,
+                    label=f"{r.kind} #{r.id}: {preview}" if preview else f"{r.kind} #{r.id}",
+                    kind=r.kind,
+                    project_id=r.project_id,
+                )
+            )
+            if r.project_id is not None:
+                pid = int(r.project_id)
+                pnode_id = f"p-{pid}"
+                if pid not in seen_projects:
+                    nodes.append(GraphNode(id=pnode_id, label=f"project #{pid}", kind="project", project_id=pid))
+                    seen_projects.add(pid)
+                edges.append(GraphEdge(source=node_id, target=pnode_id, kind="same-project"))
+
+        # Parent-of edges: limit 3 chunks per substantive source for clarity.
+        if rows:
+            parent_ids = [int(r.id) for r in rows]
+            chunk_rows = s.execute(
+                text(
+                    "SELECT id, parent_id, kind FROM sources "
+                    "WHERE parent_id = ANY(:ids) AND t_valid_to IS NULL "
+                    "ORDER BY parent_id, id"
+                ),
+                {"ids": parent_ids},
+            ).all()
+            chunk_count_per_parent: dict[int, int] = {}
+            for c in chunk_rows:
+                pid = int(c.parent_id)
+                if chunk_count_per_parent.get(pid, 0) >= 3:
+                    continue
+                chunk_count_per_parent[pid] = chunk_count_per_parent.get(pid, 0) + 1
+                cnode_id = f"c-{c.id}"
+                nodes.append(GraphNode(id=cnode_id, label=f"chunk #{c.id}", kind=c.kind, project_id=None))
+                edges.append(GraphEdge(source=f"s-{pid}", target=cnode_id, kind="parent-of"))
+
+    return GraphData(nodes=nodes, edges=edges)
+
+
 # ============ Helpers ============
 
 def _relative_time(dt: datetime) -> str:

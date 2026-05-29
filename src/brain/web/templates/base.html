@@ -104,6 +104,10 @@
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <!-- Alpine.js 3.x — lightweight client state -->
 <script defer src="https://unpkg.com/alpinejs@3.15.12/dist/cdn.min.js"></script>
+<!-- Cytoscape.js (knowledge graph; ~120KB gzipped).
+     SRI deferred: vendor Cytoscape in static/ before any `brain serve --host 0.0.0.0` deploy.
+     Tracked alongside HTMX + Alpine + Tailwind CDN in the v0.11.0 SRI note. -->
+<script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
 </head>
 <body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-white overflow-hidden">
 {% include 'partials/_sidebar.html' %}

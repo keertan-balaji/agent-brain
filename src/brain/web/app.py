@@ -36,6 +36,7 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     from brain.web.routes.dashboard import router as dashboard_router
     from brain.web.routes.health import router as health_router
     from brain.web.routes.htmx import router as htmx_router
+    from brain.web.routes.knowledge import router as knowledge_router
     from brain.web.routes.meta import router as meta_router
     from brain.web.routes.recall import router as recall_router
     from brain.web.routes.sources import router as sources_router
@@ -44,6 +45,7 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
     app.include_router(htmx_router)
     app.include_router(recall_router)
     app.include_router(health_router)
+    app.include_router(knowledge_router)
     app.include_router(api_router)
     app.include_router(meta_router)
 
